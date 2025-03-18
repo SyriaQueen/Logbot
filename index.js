@@ -1,142 +1,149 @@
-const { Client, GatewayIntentBits, EmbedBuilder, Partials } = require("discord.js");
-const express = require("express");
+const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const config = require("./config.js");
+const express = require('express');
 
-// تشغيل خادم ويب على المنفذ 10000
-const webServer = express();
-webServer.listen(10000, () => {
-  console.log("🖥️ الخادم يعمل على المنفذ 10000");
-});
-
+const app = express();
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent
-  ],
-  partials: [Partials.Message]
+  ]
 });
 
 const processedMessages = new Set();
 
+// تشغيل السيرفر لمنع الخمول
+app.listen(10000, () => {
+  console.log('✅ السيرفر يعمل على المنفذ 10000');
+});
+
 client.once("ready", () => {
-  console.log(`✅ البوت يعمل باسم: ${client.user.tag}`);
+  console.log(`✅ البوت يعمل الآن باسم: ${client.user.tag}`);
 });
 
 client.on("messageDelete", async (message) => {
+  if (processedMessages.has(message.id)) return;
+  processedMessages.add(message.id);
+  setTimeout(() => processedMessages.delete(message.id), 60000);
+
+  if (!message.attachments.size) return;
+  if (message.author?.bot) return;
+
+  const logChannel = client.channels.cache.get(config.LOG_CHANNEL_ID);
+  if (!logChannel) return;
+
   try {
-    if (message.partial) await message.fetch().catch(() => {});
-    if (!message.attachments?.size || message.author?.bot) return;
-    
-    const msgId = message.id;
-    if (processedMessages.has(msgId)) return;
-    
-    processedMessages.add(msgId);
-    setTimeout(() => processedMessages.delete(msgId), 120000);
-
-    const logChannel = client.channels.cache.get(config.LOG_CHANNEL_ID);
-    if (!logChannel) return;
-
-    // تصنيف المرفقات
     const { images, videos, others } = categorizeAttachments(message.attachments);
-    
-    // إنشاء وإرسال الأمبيد الرئيسي
-    const mainEmbed = createMainEmbed(message, images, msgId);
+
+    // إنشاء الأمبيد الرئيسي
+    const mainEmbed = new EmbedBuilder()
+      .setColor("#FF0000")
+      .setTitle("🗑️ تم حذف ملفات")
+      .setDescription(`**المستخدم:** ${message.author.tag}\n**القناة:** ${message.channel}`)
+      .setTimestamp()
+      .setFooter({ text: "تم تسجيل الحذف", iconURL: message.author.displayAvatarURL() });
+
+    // إضافة أول صورة إن وجدت
+    if (images.length > 0) {
+      mainEmbed.setImage(images[0].url);
+      images.shift(); // إزالة الصورة الأولى من المصفوفة
+    }
+
+    // إضافة الملفات الأخرى
+    addFieldsToEmbed(mainEmbed, others);
+
+    // إرسال الأمبيد الرئيسي
     await logChannel.send({ embeds: [mainEmbed] });
 
-    // إرسال الصور الإضافية في أمبيدات منفصلة
+    // إرسال الصور الإضافية كأمبيدات منفصلة
     if (images.length > 0) {
-      for (const img of images) {
-        const imgEmbed = new EmbedBuilder()
-          .setColor("#FF5555")
-          .setImage(img.url)
-          .setFooter({ text: `ID: ${msgId}` });
-        await logChannel.send({ embeds: [imgEmbed] });
+      for (const image of images) {
+        const imageEmbed = new EmbedBuilder()
+          .setColor("#FF0000")
+          .setTitle("🖼️ صورة إضافية محذوفة")
+          .setDescription(`**المستخدم:** ${message.author.tag}\n**القناة:** ${message.channel}`)
+          .setImage(image.url)
+          .setTimestamp()
+          .setFooter({ text: "تم تسجيل الحذف", iconURL: message.author.displayAvatarURL() });
+        
+        await logChannel.send({ embeds: [imageEmbed] });
       }
     }
 
-    // إرسال الفيديوهات مع التحقق من التكرار
+    // إرسال الفيديوهات كرسائل منفصلة
     if (videos.length > 0) {
-      await sendVideosWithCheck(logChannel, videos, msgId);
-    }
-
-    // إرسال الملفات الأخرى
-    if (others.length > 0) {
-      const othersEmbed = createOthersEmbed(others, msgId);
-      await logChannel.send({ embeds: [othersEmbed] });
+      await sendVideosSeparately(logChannel, videos);
     }
 
   } catch (error) {
-    console.error("❌ خطأ:", error);
+    console.error("❌ فشل إرسال السجل:", error);
   }
 });
 
-// ========== الدوال المساعدة ========== //
+// دالة لتصنيف المرفقات
 function categorizeAttachments(attachments) {
   const result = { images: [], videos: [], others: [] };
   
   attachments.forEach(attachment => {
     const type = getFileType(attachment.name);
-    if (type === 'image') result.images.push(attachment);
-    else if (type === 'video') result.videos.push(attachment);
+    if (type.name === 'صورة') result.images.push(attachment);
+    else if (type.name === 'فيديو') result.videos.push(attachment);
     else result.others.push(attachment);
   });
   
   return result;
 }
 
-function createMainEmbed(message, images, msgId) {
-  const embed = new EmbedBuilder()
-    .setColor("#FF0000")
-    .setTitle("🗑️ حذف ملفات")
-    .setDescription(`**المستخدم:** ${message.author.tag}\n**القناة:** ${message.channel}`)
-    .setFooter({ text: `ID: ${msgId}`, iconURL: message.author.displayAvatarURL() })
-    .setTimestamp();
-
-  if (images.length > 0) {
-    embed.setImage(images.shift().url);
+// دالة معدلة لإضافة الحقول (الملفات الأخرى فقط)
+function addFieldsToEmbed(embed, others) {
+  if (others.length > 0) {
+    const fieldValue = others.map(a => `[${a.name}](${a.url})`).join('\n');
+    embed.addFields({
+      name: "📁 ملفات أخرى",
+      value: fieldValue.length > 1024 ? fieldValue.slice(0, 1000) + "..." : fieldValue
+    });
   }
-  return embed;
 }
 
-async function sendVideosWithCheck(channel, videos, msgId) {
+// دالة لإرسال الفيديوهات بشكل منفصل
+async function sendVideosSeparately(channel, videos) {
   try {
-    const existing = await channel.messages.fetch({ limit: 15 });
-    const exists = existing.some(m => m.content.includes(msgId));
+    const videoLinks = videos.map(v => `🎥 **فيديو:** [${v.name}](${v.url})`);
+    const content = `**الفيديوهات المحذوفة:**\n${videoLinks.join('\n')}`;
     
-    if (!exists) {
-      const videoMsg = `🎥 **فيديوهات محذوفة (ID: ${msgId})**\n` +
-        videos.map(v => `[${v.name}](${v.url})`).join('\n');
-      
-      for (const chunk of chunkContent(videoMsg, 2000)) {
+    if (content.length > 2000) {
+      const chunks = chunkContent(content, 2000);
+      for (const chunk of chunks) {
         await channel.send(chunk);
-        await new Promise(resolve => setTimeout(resolve, 1000));
       }
+    } else {
+      await channel.send(content);
     }
   } catch (error) {
-    console.error("❌ خطأ الفيديوهات:", error);
+    console.error("❌ فشل إرسال الفيديوهات:", error);
   }
 }
 
-function createOthersEmbed(others, msgId) {
-  return new EmbedBuilder()
-    .setColor("#888888")
-    .setTitle("📁 ملفات أخرى محذوفة")
-    .setDescription(others.map(o => `[${o.name}](${o.url})`).join('\n'))
-    .setFooter({ text: `ID: ${msgId}` });
-}
-
+// دوال مساعدة
 function getFileType(filename) {
-  const ext = (filename.split('.').pop() || '').toLowerCase();
-  const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
-  const videoExts = ['mp4', 'mov', 'avi', 'mkv', 'webm'];
-  return imageExts.includes(ext) ? 'image' : videoExts.includes(ext) ? 'video' : 'other';
+  const ext = (filename.split('.').pop() || 'unknown').toLowerCase();
+  const types = {
+    image: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'],
+    video: ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv']
+  };
+  
+  return {
+    name: types.image.includes(ext) ? 'صورة' : 
+          types.video.includes(ext) ? 'فيديو' : 'ملف عام',
+    ext
+  };
 }
 
-function chunkContent(text, chunkSize) {
+function chunkContent(text, size) {
   const chunks = [];
-  for (let i = 0; i < text.length; i += chunkSize) {
-    chunks.push(text.substring(i, i + chunkSize));
+  for (let i = 0; i < text.length; i += size) {
+    chunks.push(text.substring(i, i + size));
   }
   return chunks;
 }
