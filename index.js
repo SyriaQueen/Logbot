@@ -13,7 +13,7 @@ const client = new Client({
 
 const processedMessages = new Set();
 
-// تشغيل السيرفر لمنع الخمول
+// تشغيل سيرفر ويب لمنع الخمول
 app.listen(10000, () => {
   console.log('✅ السيرفر يعمل على المنفذ 10000');
 });
@@ -44,36 +44,69 @@ client.on("messageDelete", async (message) => {
       .setTimestamp()
       .setFooter({ text: "تم تسجيل الحذف", iconURL: message.author.displayAvatarURL() });
 
-    // إضافة أول صورة إن وجدت
+    // معالجة الصورة الأولى
     if (images.length > 0) {
-      mainEmbed.setImage(images[0].url);
-      images.shift(); // إزالة الصورة الأولى من المصفوفة
+      const firstImage = images[0];
+      mainEmbed
+        .setImage(firstImage.attachment.url)
+        .addFields({
+          name: "🖼️ معلومات الملف",
+          value: `**النوع:** ${firstImage.type.name}\n**الإمتداد:** .${firstImage.type.ext}`
+        });
+      images.shift();
     }
 
     // إضافة الملفات الأخرى
-    addFieldsToEmbed(mainEmbed, others);
+    if (others.length > 0) {
+      const otherFiles = others.map(f => 
+        `[${f.attachment.name}](${f.attachment.url}) ` + 
+        `(النوع: ${f.type.name}, الإمتداد: .${f.type.ext})`
+      ).join('\n');
+      
+      mainEmbed.addFields({
+        name: "📁 ملفات أخرى",
+        value: otherFiles.length > 1024 ? 
+          otherFiles.slice(0, 900) + "... (تجاوز الحد الأقصى)" : 
+          otherFiles
+      });
+    }
 
     // إرسال الأمبيد الرئيسي
     await logChannel.send({ embeds: [mainEmbed] });
 
-    // إرسال الصور الإضافية كأمبيدات منفصلة
-    if (images.length > 0) {
-      for (const image of images) {
-        const imageEmbed = new EmbedBuilder()
-          .setColor("#FF0000")
-          .setTitle("🖼️ صورة إضافية محذوفة")
-          .setDescription(`**المستخدم:** ${message.author.tag}\n**القناة:** ${message.channel}`)
-          .setImage(image.url)
-          .setTimestamp()
-          .setFooter({ text: "تم تسجيل الحذف", iconURL: message.author.displayAvatarURL() });
-        
-        await logChannel.send({ embeds: [imageEmbed] });
-      }
+    // إرسال الصور الإضافية
+    for (const img of images) {
+      const imgEmbed = new EmbedBuilder()
+        .setColor("#FFA500")
+        .setTitle("🖼️ صورة إضافية محذوفة")
+        .setDescription(
+          `**المستخدم:** ${message.author.tag}\n` +
+          `**القناة:** ${message.channel}\n` +
+          `**الإمتداد:** .${img.type.ext}`
+        )
+        .setImage(img.attachment.url)
+        .setTimestamp();
+      
+      await logChannel.send({ embeds: [imgEmbed] });
     }
 
-    // إرسال الفيديوهات كرسائل منفصلة
+    // إرسال الفيديوهات
     if (videos.length > 0) {
-      await sendVideosSeparately(logChannel, videos);
+      const videoMessages = videos.map(v => 
+        `🎬 **فيديو:** [${v.attachment.name}](${v.attachment.url})\n` +
+        `▸ النوع: ${v.type.name}\n▸ الإمتداد: .${v.type.ext}`
+      );
+      
+      const content = `**الفيديوهات المحذوفة:**\n${videoMessages.join('\n\n')}`;
+      
+      if (content.length > 2000) {
+        const chunks = chunkContent(content, 2000);
+        for (const chunk of chunks) {
+          await logChannel.send(chunk);
+        }
+      } else {
+        await logChannel.send(content);
+      }
     }
 
   } catch (error) {
@@ -81,71 +114,57 @@ client.on("messageDelete", async (message) => {
   }
 });
 
-// دالة لتصنيف المرفقات
+// ========== الدوال المساعدة ========== //
 function categorizeAttachments(attachments) {
   const result = { images: [], videos: [], others: [] };
   
   attachments.forEach(attachment => {
     const type = getFileType(attachment.name);
-    if (type.name === 'صورة') result.images.push(attachment);
-    else if (type.name === 'فيديو') result.videos.push(attachment);
-    else result.others.push(attachment);
+    const fileData = {
+      attachment: attachment,
+      type: type
+    };
+    
+    if (type.name === 'صورة') result.images.push(fileData);
+    else if (type.name === 'فيديو') result.videos.push(fileData);
+    else result.others.push(fileData);
   });
   
   return result;
 }
 
-// دالة معدلة لإضافة الحقول (الملفات الأخرى فقط)
-function addFieldsToEmbed(embed, others) {
-  if (others.length > 0) {
-    const fieldValue = others.map(a => `[${a.name}](${a.url})`).join('\n');
-    embed.addFields({
-      name: "📁 ملفات أخرى",
-      value: fieldValue.length > 1024 ? fieldValue.slice(0, 1000) + "..." : fieldValue
-    });
-  }
-}
-
-// دالة لإرسال الفيديوهات بشكل منفصل
-async function sendVideosSeparately(channel, videos) {
-  try {
-    const videoLinks = videos.map(v => `🎥 **فيديو:** [${v.name}](${v.url})`);
-    const content = `**الفيديوهات المحذوفة:**\n${videoLinks.join('\n')}`;
-    
-    if (content.length > 2000) {
-      const chunks = chunkContent(content, 2000);
-      for (const chunk of chunks) {
-        await channel.send(chunk);
-      }
-    } else {
-      await channel.send(content);
-    }
-  } catch (error) {
-    console.error("❌ فشل إرسال الفيديوهات:", error);
-  }
-}
-
-// دوال مساعدة
 function getFileType(filename) {
   const ext = (filename.split('.').pop() || 'unknown').toLowerCase();
-  const types = {
+  const categories = {
     image: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'],
-    video: ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv']
+    video: ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv'],
+    document: ['pdf', 'docx', 'txt', 'xlsx', 'pptx'],
+    audio: ['mp3', 'wav', 'ogg'],
+    archive: ['zip', 'rar', '7z']
   };
   
-  return {
-    name: types.image.includes(ext) ? 'صورة' : 
-          types.video.includes(ext) ? 'فيديو' : 'ملف عام',
-    ext
-  };
+  const typeName = 
+    categories.image.includes(ext) ? 'صورة' :
+    categories.video.includes(ext) ? 'فيديو' :
+    categories.document.includes(ext) ? 'مستند' :
+    categories.audio.includes(ext) ? 'صوت' :
+    categories.archive.includes(ext) ? 'أرشيف' :
+    'ملف عام';
+  
+  return { name: typeName, ext };
 }
 
-function chunkContent(text, size) {
+function chunkContent(text, chunkSize) {
   const chunks = [];
-  for (let i = 0; i < text.length; i += size) {
-    chunks.push(text.substring(i, i + size));
+  for (let i = 0; i < text.length; i += chunkSize) {
+    chunks.push(text.substring(i, i + chunkSize));
   }
   return chunks;
 }
+
+// منع الخمول
+setInterval(() => {
+  console.log("🔄 البوت في حالة نشطة - " + new Date().toLocaleString());
+}, 300000);
 
 client.login(config.TOKEN);
