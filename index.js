@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits } = require("discord.js");
+const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const config = require("./config.js");
 
 const client = new Client({
@@ -13,7 +13,7 @@ client.once("ready", () => {
   console.log(`✅ البوت يعمل الآن باسم: ${client.user.tag}`);
 });
 
-// 🗑️ تسجيل حذف الملفات مع تحديد النوع والامتداد
+// 🗑️ تسجيل حذف الملفات مع تحديد النوع والامتداد داخل Embed
 client.on("messageDelete", async (message) => {
   if (!message.attachments.size) return; // إذا لم يكن هناك ملفات مرفقة، لا تفعل شيئًا
 
@@ -35,13 +35,20 @@ client.on("messageDelete", async (message) => {
         fileType = "🎥 فيديو";
       }
 
-      filesInfo.push(`${fileType} (${fileExtension}): 📎 ${fileUrl}`);
+      filesInfo.push(`**${fileType} (${fileExtension})**\n📎 [رابط الملف](${fileUrl})`);
     });
 
-    // إرسال السجل برسالة واحدة
-    logChannel.send({
-      content: `🗑 **${message.author.tag}** حذف الملفات التالية في ${message.channel}:\n${filesInfo.join("\n")}`
-    });
+    // إنشاء Embed بتصميم أنيق
+    const embed = new EmbedBuilder()
+      .setColor("#FF0000") // لون أحمر للدلالة على الحذف
+      .setTitle("🗑️ تم حذف ملفات")
+      .setDescription(`**المستخدم:** ${message.author.tag}\n**القناة:** ${message.channel}`)
+      .addFields({ name: "📂 الملفات:", value: filesInfo.join("\n") })
+      .setTimestamp()
+      .setFooter({ text: "تم تسجيل الحذف", iconURL: message.author.displayAvatarURL() });
+
+    // إرسال السجل داخل Embed
+    logChannel.send({ embeds: [embed] });
   } catch (error) {
     console.error("❌ فشل إرسال السجل:", error);
     logChannel.send(`⚠️ **خطأ:** لم يتمكن البوت من إرسال سجل الحذف لـ **${message.author.tag}**.`);
