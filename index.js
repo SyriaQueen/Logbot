@@ -1,7 +1,7 @@
 const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const config = require("./config.js");
 const express = require('express');
-const fetch = require('node-fetch');
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 const app = express();
 const client = new Client({
