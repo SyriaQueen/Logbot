@@ -2,10 +2,15 @@ const { Client, GatewayIntentBits, EmbedBuilder, Partials } = require("discord.j
 const express = require("express");
 const config = require("./config.js");
 
-// تشغيل خادم ويب على المنفذ 10000
-const webServer = express();
-webServer.listen(10000, () => {
-  console.log("🖥️ الخادم يعمل على المنفذ 10000");
+const app = express();
+
+// تشغيل الخادم على المنفذ 10000
+app.get('/', (req, res) => {
+    res.send('البوت يعمل!');
+});
+
+app.listen(10000, () => {
+    console.log('خادم يعمل على المنفذ 10000');
 });
 
 const client = new Client({
