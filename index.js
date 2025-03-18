@@ -13,15 +13,36 @@ const client = new Client({
 
 const processedMessages = new Set();
 
-// تشغيل سيرفر ويب لمنع الخمول
+// تشغيل خادم الويب لمنع الخمول
+app.get('/', (req, res) => {
+  res.send('البوت يعمل!');
+});
+
 app.listen(10000, () => {
-  console.log('✅ السيرفر يعمل على المنفذ 10000');
+  console.log('✅ خادم الويب يعمل على المنفذ 10000');
 });
 
 client.once("ready", () => {
   console.log(`✅ البوت يعمل الآن باسم: ${client.user.tag}`);
+
+  // التأكد من أن setInterval يعمل مرة واحدة فقط بعد تسجيل الدخول
+  keepBotAlive();
 });
 
+function keepBotAlive() {
+  setInterval(() => {
+    console.log("🔄 البوت نشط - " + new Date().toLocaleString());
+    pingSelf();
+  }, 300000); // كل 5 دقائق
+}
+
+function pingSelf() {
+  const url = "https://logbot-0za5.onrender.com"; // ضع رابط الـ Render هنا
+  require("node-fetch")(url)
+    .then(res => res.text())
+    .then(() => console.log("✅ تم إرسال Ping لمنع الخمول"))
+    .catch(err => console.error("❌ فشل إرسال Ping:", err));
+}
 client.on("messageDelete", async (message) => {
   if (processedMessages.has(message.id)) return;
   processedMessages.add(message.id);
@@ -161,10 +182,5 @@ function chunkContent(text, chunkSize) {
   }
   return chunks;
 }
-
-// منع الخمول
-setInterval(() => {
-  console.log("🔄 البوت في حالة نشطة - " + new Date().toLocaleString());
-}, 300000);
 
 client.login(config.TOKEN);
