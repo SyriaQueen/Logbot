@@ -2,14 +2,10 @@ const { Client, GatewayIntentBits, EmbedBuilder, Partials } = require("discord.j
 const express = require("express");
 const config = require("./config.js");
 
-const app = express();
-
-app.get('/', (req, res) => {
-    res.send('البوت يعمل!');
-});
-
-app.listen(10000, () => {
-    console.log('خادم يعمل على المنفذ 10000');
+// تشغيل خادم ويب على المنفذ 10000
+const webServer = express();
+webServer.listen(10000, () => {
+  console.log("🖥️ الخادم يعمل على المنفذ 10000");
 });
 
 const client = new Client({
@@ -29,52 +25,37 @@ client.once("ready", () => {
 
 client.on("messageDelete", async (message) => {
   try {
-    // محاولة جلب الرسالة إذا كانت جزئية
-    if (message.partial) {
-      try {
-        await message.fetch();
-      } catch {
-        return;
-      }
-    }
-
-    // التحقق من الشروط
-    if (
-      !message.attachments?.size || 
-      !message.author ||
-      message.author.bot
-    ) return;
-
+    if (message.partial) await message.fetch().catch(() => {});
+    if (!message.attachments?.size || message.author?.bot) return;
+    
     const msgId = message.id;
     if (processedMessages.has(msgId)) return;
     
     processedMessages.add(msgId);
     setTimeout(() => processedMessages.delete(msgId), 120000);
 
-    // جلب قناة اللوغات
-    const logChannel = await client.channels.fetch(config.LOG_CHANNEL_ID).catch(() => null);
-    if (!logChannel) {
-      console.error("❌ قناة اللوغ غير موجودة!");
-      return;
-    }
+    const logChannel = client.channels.cache.get(config.LOG_CHANNEL_ID);
+    if (!logChannel) return;
 
     // تصنيف المرفقات
     const { images, videos, others } = categorizeAttachments(message.attachments);
     
-    // إنشاء الأمبيد الرئيسي
+    // إنشاء وإرسال الأمبيد الرئيسي
     const mainEmbed = createMainEmbed(message, images, msgId);
     await logChannel.send({ embeds: [mainEmbed] });
 
-    // إرسال الصور الإضافية
-    for (const img of images) {
-      const imgEmbed = new EmbedBuilder()
-        .setColor("#FF5555")
-        .setImage(img.url)
-        .setFooter({ text: `ID: ${msgId}` });
-      await logChannel.send({ embeds: [imgEmbed] });
+    // إرسال الصور الإضافية في أمبيدات منفصلة
+    if (images.length > 0) {
+      for (const img of images) {
+        const imgEmbed = new EmbedBuilder()
+          .setColor("#FF5555")
+          .setImage(img.url)
+          .setFooter({ text: `ID: ${msgId}` });
+        await logChannel.send({ embeds: [imgEmbed] });
+      }
     }
 
-    // إرسال الفيديوهات
+    // إرسال الفيديوهات مع التحقق من التكرار
     if (videos.length > 0) {
       await sendVideosWithCheck(logChannel, videos, msgId);
     }
@@ -108,26 +89,19 @@ function createMainEmbed(message, images, msgId) {
   const embed = new EmbedBuilder()
     .setColor("#FF0000")
     .setTitle("🗑️ حذف ملفات")
-    .setDescription(
-      `**المستخدم:** ${message.author?.tag || 'مستخدم مجهول'}\n` +
-      `**القناة:** ${message.channel}`
-    )
-    .setFooter({ 
-      text: `ID: ${msgId}`, 
-      iconURL: message.author?.displayAvatarURL() 
-    })
+    .setDescription(`**المستخدم:** ${message.author.tag}\n**القناة:** ${message.channel}`)
+    .setFooter({ text: `ID: ${msgId}`, iconURL: message.author.displayAvatarURL() })
     .setTimestamp();
 
   if (images.length > 0) {
-    embed.setImage(images[0].url);
-    images.shift();
+    embed.setImage(images.shift().url);
   }
   return embed;
 }
 
 async function sendVideosWithCheck(channel, videos, msgId) {
   try {
-    const existing = await channel.messages.fetch({ limit: 50 });
+    const existing = await channel.messages.fetch({ limit: 15 });
     const exists = existing.some(m => m.content.includes(msgId));
     
     if (!exists) {
