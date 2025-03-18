@@ -1,9 +1,8 @@
 const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const config = require("./config.js");
 const express = require('express');
-const fetch = require('node-fetch');
 
-const app = express();
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -14,36 +13,25 @@ const client = new Client({
 
 const processedMessages = new Set();
 
-// إعداد السيرفر
+const app = express();
+
+// تشغيل الخادم على المنفذ 10000
 app.get('/', (req, res) => {
     res.send('البوت يعمل!');
 });
 
 app.listen(10000, () => {
-    console.log('✅ السيرفر يعمل على المنفذ 10000');
+    console.log('خادم يعمل على المنفذ 10000');
 });
 
-client.once("ready", () => {
-  console.log(`✅ البوت يعمل الآن باسم: ${client.user.tag}`);
-  pingSelf();
-});
-
-// نظام منع الخمول
+// إعداد setInterval للحفاظ على البوت نشطًا
 setInterval(() => {
-  console.log("🔄 البوت نشط - " + new Date().toLocaleString());
-  pingSelf();
-}, 300000);
+    console.log("البوت يعمل...");
+}, 5 * 60 * 1000);
 
-function pingSelf() {
-  const url = "https://logbot-0za5.onrender.com/"; // غير هذا الرابط
-  fetch(url)
-    .then(res => {
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-      return res.text();
-    })
-    .then(() => console.log("✅ تم إرسال Ping لمنع الخمول"))
-    .catch(err => console.error("❌ فشل إرسال Ping:", err.message));
-}
+client.once('ready', () => {
+    console.log(`تم تسجيل الدخول كـ ${client.user.tag}!`);
+});
 
 client.on("messageDelete", async (message) => {
   if (processedMessages.has(message.id)) return;
@@ -59,6 +47,7 @@ client.on("messageDelete", async (message) => {
   try {
     const { images, videos, others } = categorizeAttachments(message.attachments);
 
+    // إنشاء الأمبيد الرئيسي
     const mainEmbed = new EmbedBuilder()
       .setColor("#FF0000")
       .setTitle("🗑️ تم حذف ملفات")
@@ -66,6 +55,7 @@ client.on("messageDelete", async (message) => {
       .setTimestamp()
       .setFooter({ text: "تم تسجيل الحذف", iconURL: message.author.displayAvatarURL() });
 
+    // معالجة الصورة الأولى
     if (images.length > 0) {
       const firstImage = images[0];
       mainEmbed
@@ -77,6 +67,7 @@ client.on("messageDelete", async (message) => {
       images.shift();
     }
 
+    // إضافة الملفات الأخرى
     if (others.length > 0) {
       const otherFiles = others.map(f => 
         `[${f.attachment.name}](${f.attachment.url}) ` + 
@@ -91,8 +82,10 @@ client.on("messageDelete", async (message) => {
       });
     }
 
+    // إرسال الأمبيد الرئيسي
     await logChannel.send({ embeds: [mainEmbed] });
 
+    // إرسال الصور الإضافية
     for (const img of images) {
       const imgEmbed = new EmbedBuilder()
         .setColor("#FFA500")
@@ -108,6 +101,7 @@ client.on("messageDelete", async (message) => {
       await logChannel.send({ embeds: [imgEmbed] });
     }
 
+    // إرسال الفيديوهات
     if (videos.length > 0) {
       const videoMessages = videos.map(v => 
         `🎬 **فيديو:** [${v.attachment.name}](${v.attachment.url})\n` +
@@ -131,7 +125,7 @@ client.on("messageDelete", async (message) => {
   }
 });
 
-// ======= الدوال المساعدة ======= //
+// ========== الدوال المساعدة ========== //
 function categorizeAttachments(attachments) {
   const result = { images: [], videos: [], others: [] };
   
