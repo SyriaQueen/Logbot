@@ -173,4 +173,4 @@ function chunkContent(text, chunkSize) {
   return chunks;
 }
 
-client.login(config.TOKEN);
+client.login("MTM1MTEwNzU5MjczODQ0MzI3NQ.G_P19t.sL8X4R6yQeiGkO2hsI8e6n3T8A0Z_di2SWyuzc").catch(err => console.error("❌ فشل تسجيل الدخول:", err));
