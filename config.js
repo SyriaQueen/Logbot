@@ -1,4 +1,7 @@
 module.exports = {
-  TOKEN: "MTM1MTEwNzU5MjczODQ0MzI3NQ.G_P19t.sL8X4R6yQeiGkO2hsI8e6n3T8A0Z_di2SWyuzc", // ضع التوكن الخاص بالبوت هنا
-  LOG_CHANNEL_ID: "1328375690109653096", // ضع معرف القناة التي سترسل إليها السجلات هنا
+    TOKEN: 'MTM1MTEwNzU5MjczODQ0MzI3NQ.G_P19t.sL8X4R6yQeiGkO2hsI8e6n3T8A0Z_di2SWyuzc',
+    PREFIX: '!',
+    LOG_CHANNEL_ID: '1351845626836549652',
+    TICKET_CHANNEL_ID: '1351845587946831903',
+    TICKET_CATEGORY_ID: '1350897162665590845'
 };
