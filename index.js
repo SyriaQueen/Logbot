@@ -6,7 +6,8 @@ const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.MessageDelete // إضافة لمراقبة حذف الرسائل
     ]
 });
 
@@ -22,6 +23,13 @@ for (const file of commandFiles) {
 client.once('ready', () => {
     console.log(`تم تسجيل الدخول كـ ${client.user.tag}!`);
 });
+
+// تحميل الأحداث من مجلد events
+const eventFiles = fs.readdirSync('./events').filter(file => file.endsWith('.js'));
+for (const file of eventFiles) {
+    const event = require(`./events/${file}`);
+    event(client); // تمرير client إلى كل حدث
+}
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
