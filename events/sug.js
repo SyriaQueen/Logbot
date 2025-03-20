@@ -115,21 +115,28 @@ module.exports = (client) => {
             }).catch(console.error);
         }
 
-const suggestionAuthor = await interaction.guild.members.fetch(suggestionAuthorId).catch(() => null);
-const logEmbed = new EmbedBuilder()
-    .setColor(decisionColor)
-    .setTitle('📌 تم الرد على اقتراح')
-    .setDescription(`📝 **الاقتراح:**\n${suggestionText}`)
-    .addFields(
-        { name: '👤 الإداري المسؤول', value: `**${interaction.user.tag}** - **ID:** ${interaction.user.id}`, inline: true },
-        { name: '🆔 صاحب الاقتراح', value: `**${suggestionAuthor ? suggestionAuthor.tag : 'العضو غير موجود'}** - **ID:** ${suggestionAuthorId}`, inline: true },
-        { name: '📌 الحالة', value: `**${decision}**`, inline: true },
-        { name: '✍️ السبب', value: `**${reason}**`, inline: false },
-        { name: '🔗 رابط الاقتراح', value: `[اضغط هنا](https://discord.com/channels/${interaction.guild.id}/${interaction.channel.id}/${interaction.message.id})` }
-    )
-    .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 1024 }))
-    .setFooter({ text: '📅 تم الرد في', iconURL: interaction.guild.iconURL() })
-    .setTimestamp();
+        const logChannel = interaction.guild.channels.cache.get(suggestionLogChannelId);
+        if (logChannel) {
+            const suggestionText = originalEmbed.description.replace('**الاقتراح:**\n', '');
+            const suggestionAuthorId = interaction.customId.split('_')[3]; // استخدم الـ ID فقط
+            const suggestionAuthor = await interaction.guild.members.fetch(suggestionAuthorId);
 
-// إرسال الـ embed إلى قناة السجل
-logChannel.send({ embeds: [logEmbed] }).catch(console.error);
+            const logEmbed = new EmbedBuilder()
+                .setColor(decisionColor)
+                .setTitle('📌 تم الرد على اقتراح')
+                .setDescription(`📝 **الاقتراح:**\n${suggestionText}`)
+                .addFields(
+                    { name: '👤 الإداري المسؤول', value: `**${interaction.user.tag}** - **ID:** ${interaction.user.id}`, inline: true },
+                    { name: '🆔 صاحب الاقتراح', value: `**${suggestionAuthor.tag}** - **ID:** ${suggestionAuthor.id}`, inline: true },
+                    { name: '📌 الحالة', value: `**${decision}**`, inline: true },
+                    { name: '✍️ السبب', value: `**${reason}**`, inline: false },
+                    { name: '🔗 رابط الاقتراح', value: `[اضغط هنا](https://discord.com/channels/${interaction.guild.id}/${interaction.channel.id}/${interaction.message.id})` }
+                )
+                .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 1024 }))
+                .setFooter({ text: '📅 تم الرد في', iconURL: interaction.guild.iconURL() })
+                .setTimestamp();
+
+            logChannel.send({ embeds: [logEmbed] }).catch(console.error);
+        }
+    });
+};
