@@ -2,45 +2,12 @@ const {
     EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, 
     ModalBuilder, TextInputBuilder, TextInputStyle, PermissionsBitField 
 } = require('discord.js');
-const fs = require('fs');
 const config = require('../config.js');
 
 module.exports = (client) => {
     const suggestionChannelId = config.suggestionChannelId;
+    const userVotes = {};
 
-    // تحميل بيانات التصويتات من ملف JSON
-    const loadVotes = () => {
-        try {
-            const data = fs.readFileSync('votes.json', 'utf8');
-            const votes = JSON.parse(data);
-
-            // تحويل المصفوفات إلى Set
-            for (const key in votes) {
-                if (votes.hasOwnProperty(key)) {
-                    votes[key] = new Set(votes[key]);
-                }
-            }
-            return votes;
-        } catch (error) {
-            return {};
-        }
-    };
-
-    // حفظ بيانات التصويتات إلى ملف JSON
-    const saveVotes = (votes) => {
-        const votesToSave = {};
-
-        // تحويل Set إلى مصفوفة قبل حفظها
-        for (const key in votes) {
-            if (votes.hasOwnProperty(key)) {
-                votesToSave[key] = Array.from(votes[key]);
-            }
-        }
-
-        fs.writeFileSync('votes.json', JSON.stringify(votesToSave, null, 2), 'utf8');
-    };
-
-    // عند إرسال اقتراح جديد
     client.on('messageCreate', async (message) => {
         if (message.channel.id !== suggestionChannelId || message.author.bot) return;
 
@@ -80,13 +47,11 @@ module.exports = (client) => {
             .catch(console.error);
     });
 
-    // عند التفاعل مع الأزرار
     client.on('interactionCreate', async (interaction) => {
         if (!interaction.isButton()) return;
 
         const messageId = interaction.message.id;
         const userId = interaction.user.id;
-        let userVotes = loadVotes(); // تحميل التصويتات
 
         if (interaction.customId.startsWith('accept') || interaction.customId.startsWith('reject')) {
             if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
@@ -108,13 +73,10 @@ module.exports = (client) => {
             await interaction.showModal(modal);
         } else if (interaction.customId === 'upvote' || interaction.customId === 'downvote') {
             if (!userVotes[messageId]) userVotes[messageId] = new Set();
-
-            // التحقق مما إذا كان المستخدم قد صوّت مسبقًا
             if (userVotes[messageId].has(userId)) {
                 return interaction.reply({ content: 'لقد قمت بالتصويت مسبقًا.', ephemeral: true });
             }
-
-            userVotes[messageId].add(userId); // إضافة التصويت
+            userVotes[messageId].add(userId);
 
             const originalEmbed = interaction.message.embeds[0];
             const fields = originalEmbed.fields;
@@ -127,14 +89,10 @@ module.exports = (client) => {
             const updatedEmbed = EmbedBuilder.from(originalEmbed)
                 .spliceFields(1, 1, { name: 'التصويتات', value: `<a:True:1280855790021771297> ${upvotes} | <a:False:1280855878223921152> ${downvotes}`, inline: true });
 
-            // حفظ التصويتات
-            saveVotes(userVotes);
-
             await interaction.update({ embeds: [updatedEmbed], components: interaction.message.components });
         }
     });
 
-    // عند تقديم الرد
     client.on('interactionCreate', async (interaction) => {
         if (!interaction.isModalSubmit()) return;
 
