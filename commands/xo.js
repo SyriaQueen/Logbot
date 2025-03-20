@@ -23,7 +23,7 @@ module.exports = {
             .setDescription(`${opponent}, ${message.author} يتحداك في لعبة XO!\nاضغط الزر خلال 60 ثانية للقبول`);
 
         const startButton = new ButtonBuilder()
-            .setCustomId('accept_xo')
+            .setCustomId('xacs')
             .setLabel('قبول التحدي')
             .setStyle(ButtonStyle.Success);
 
