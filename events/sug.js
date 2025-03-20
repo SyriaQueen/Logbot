@@ -115,8 +115,7 @@ module.exports = (client) => {
             }).catch(console.error);
         }
 
-        const suggestionAuthor = await interaction.guild.members.fetch(suggestionAuthorId).catch(() => null);
-
+const suggestionAuthor = await interaction.guild.members.fetch(suggestionAuthorId).catch(() => null);
 const logEmbed = new EmbedBuilder()
     .setColor(decisionColor)
     .setTitle('📌 تم الرد على اقتراح')
