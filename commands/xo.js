@@ -1,97 +1,203 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const config = require('../config.js'); // تأكدي أن لديك ملف config.js يحتوي على البريفكس
-const PREFIX = config.PREFIX;
+const config = require('../config.js');
 
-module.exports = (client) => {
-    client.on('messageCreate', async (message) => {
-        if (!message.content.startsWith(`${PREFIX}xo`) || message.author.bot) return;
+// تخزين الألعاب النشطة
+const activeGames = new Map();
 
-        const args = message.content.slice(PREFIX.length).trim().split(/ +/);
+module.exports = {
+    name: 'xo',
+    description: 'ابدأ لعبة تيك تاك تو (X O) مع لاعب آخر',
+    async execute(message, args, client) {
+        // التحقق من المنشن
         const opponent = message.mentions.users.first();
-        if (!opponent || opponent.id === message.author.id || opponent.bot) {
-            return message.reply('يجب عليكِ الإشارة إلى لاعب آخر لبدء اللعبة!');
+        if (!opponent || opponent.bot || opponent.id === message.author.id) {
+            return message.reply('الرجاء تحديد لاعب حقيقي لتحديه! مثال: `!xo @اللاعب`');
         }
 
-        const board = ['⬜', '⬜', '⬜', '⬜', '⬜', '⬜', '⬜', '⬜', '⬜'];
-        const players = [
-            { user: message.author, symbol: '❌' },
-            { user: opponent, symbol: '⭕' }
-        ];
-        let turn = 0;
-        let winner = null;
-
-        function renderBoard() {
-            return `\`\`\`
-${board[0]} | ${board[1]} | ${board[2]}
----------
-${board[3]} | ${board[4]} | ${board[5]}
----------
-${board[6]} | ${board[7]} | ${board[8]}
-\`\`\``;
+        // التحقق من وجود لعبة نشطة
+        if (activeGames.has(message.channel.id)) {
+            return message.reply('هناك لعبة نشطة بالفعل في هذه القناة!');
         }
 
-        const embed = new EmbedBuilder()
-            .setColor(0x00B2FF)
-            .setTitle('لعبة XO')
-            .setDescription(renderBoard())
-            .addFields({ name: 'الدور الحالي', value: `<@${players[turn].user.id}> (${players[turn].symbol})` });
+        // إنشاء لوحة اللعبة
+        const gameBoard = Array(9).fill(null);
+        let currentPlayer = message.author;
 
-        const row = new ActionRowBuilder();
-        for (let i = 0; i < 9; i++) {
-            row.addComponents(new ButtonBuilder()
-                .setCustomId(`xo_${i}`)
-                .setLabel((i + 1).toString())
-                .setStyle(ButtonStyle.Secondary));
-        }
+        // إنشاء زر البداية
+        const startRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('start_xo')
+                .setLabel('بدء اللعبة!')
+                .setStyle(ButtonStyle.Primary)
+        );
 
-        const gameMessage = await message.channel.send({ embeds: [embed], components: [row] });
+        // إرسال رسالة البداية
+        const startEmbed = new EmbedBuilder()
+            .setColor('#2ecc71')
+            .setTitle('تحدي تيك تاك تو!')
+            .setDescription(`${message.author} يتحدى ${opponent}!\nاضغط الزر لبدء اللعبة!`);
 
-        const filter = (interaction) => interaction.customId.startsWith('xo_') && 
-            (interaction.user.id === players[0].user.id || interaction.user.id === players[1].user.id);
-        const collector = gameMessage.createMessageComponentCollector({ filter, time: 60000 });
-
-        collector.on('collect', async (interaction) => {
-            if (interaction.user.id !== players[turn].user.id) {
-                return interaction.reply({ content: 'ليس دورك!', ephemeral: true });
-            }
-
-            const index = parseInt(interaction.customId.split('_')[1]);
-            if (board[index] !== '⬜') {
-                return interaction.reply({ content: 'هذه الخانة مشغولة!', ephemeral: true });
-            }
-
-            board[index] = players[turn].symbol;
-            winner = checkWinner();
-
-            if (winner || !board.includes('⬜')) {
-                collector.stop();
-            } else {
-                turn = 1 - turn;
-            }
-
-            const updatedEmbed = EmbedBuilder.from(embed)
-                .setDescription(renderBoard())
-                .spliceFields(0, 1, { name: 'الدور الحالي', value: winner ? `الفائز: <@${winner.user.id}> 🎉` : `<@${players[turn].user.id}> (${players[turn].symbol})` });
-
-            await interaction.update({ embeds: [updatedEmbed] });
-
-            if (winner || !board.includes('⬜')) {
-                gameMessage.edit({ components: [] });
-            }
+        const startMessage = await message.channel.send({
+            embeds: [startEmbed],
+            components: [startRow]
         });
 
-        function checkWinner() {
-            const lines = [
-                [0, 1, 2], [3, 4, 5], [6, 7, 8], // صفوف
-                [0, 3, 6], [1, 4, 7], [2, 5, 8], // أعمدة
-                [0, 4, 8], [2, 4, 6]             // أقطار
-            ];
-            for (const [a, b, c] of lines) {
-                if (board[a] !== '⬜' && board[a] === board[b] && board[a] === board[c]) {
-                    return players.find(p => p.symbol === board[a]);
+        // معالجة بدء اللعبة
+        const filter = i => i.customId === 'start_xo' && i.user.id === opponent.id;
+        const collector = startMessage.createMessageComponentCollector({ filter, time: 60000 });
+
+        collector.on('collect', async i => {
+            // حذف رسالة البداية
+            await startMessage.delete();
+
+            // إنشاء اللوحة التفاعلية
+            const boardEmbed = new EmbedBuilder()
+                .setColor('#3498db')
+                .setTitle(`🎮 دور ${currentPlayer.tag}`)
+                .setDescription('استخدم الأزرار للعب!');
+
+            // إنشاء أزرار اللوحة
+            const rows = [];
+            for (let i = 0; i < 3; i++) {
+                const row = new ActionRowBuilder();
+                for (let j = 0; j < 3; j++) {
+                    const index = i * 3 + j;
+                    row.addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(`cell_${index}`)
+                            .setLabel('ـ')
+                            .setStyle(ButtonStyle.Secondary)
+                    );
                 }
+                rows.push(row);
             }
-            return null;
-        }
-    });
+
+            // إرسال لوحة اللعبة
+            const gameMessage = await message.channel.send({
+                embeds: [boardEmbed],
+                components: rows
+            });
+
+            // حفظ حالة اللعبة
+            activeGames.set(message.channel.id, {
+                board: gameBoard,
+                players: [message.author.id, opponent.id],
+                currentPlayer: message.author.id,
+                gameMessage
+            });
+
+            // معالجة النقرات على الأزرار
+            const gameCollector = gameMessage.createMessageComponentCollector({ 
+                componentType: 'BUTTON',
+                time: 600000 // 10 دقائق
+            });
+
+            gameCollector.on('collect', async i => {
+                if (![message.author.id, opponent.id].includes(i.user.id)) {
+                    return i.reply({ content: 'ليس دورك للعب!', ephemeral: true });
+                }
+
+                if (i.user.id !== activeGames.get(message.channel.id).currentPlayer) {
+                    return i.reply({ content: 'ليس دورك الآن!', ephemeral: true });
+                }
+
+                const cellIndex = parseInt(i.customId.split('_')[1]);
+                const gameData = activeGames.get(message.channel.id);
+
+                if (gameData.board[cellIndex] !== null) {
+                    return i.reply({ content: 'هذه الخلية محجوزة!', ephemeral: true });
+                }
+
+                // تحديث اللوحة
+                const symbol = gameData.currentPlayer === message.author.id ? '❌' : '⭕';
+                gameData.board[cellIndex] = symbol;
+                
+                // تحديث الأزرار
+                const updatedComponents = i.message.components.map(row => {
+                    return new ActionRowBuilder().addComponents(
+                        row.components.map(button => {
+                            const btnIndex = parseInt(button.customId.split('_')[1]);
+                            if (btnIndex === cellIndex) {
+                                return new ButtonBuilder()
+                                    .setCustomId(button.customId)
+                                    .setLabel(symbol)
+                                    .setStyle(ButtonStyle.Primary)
+                                    .setDisabled(true);
+                            }
+                            return ButtonBuilder.from(button);
+                        })
+                    );
+                });
+
+                // التحقق من الفوز
+                const winner = checkWinner(gameData.board);
+                if (winner) {
+                    activeGames.delete(message.channel.id);
+                    gameCollector.stop();
+                    
+                    const resultEmbed = new EmbedBuilder()
+                        .setColor('#e74c3c')
+                        .setTitle(winner === 'draw' ? 'تعادل!' : `🎉 فوز ${symbol}!`)
+                        .setDescription(winner === 'draw' 
+                            ? 'اللعبة انتهت بالتعادل!' 
+                            : `${i.user} فاز باللعبة!`);
+
+                    return i.update({
+                        embeds: [resultEmbed],
+                        components: updatedComponents
+                    });
+                }
+
+                // تبديل اللاعب
+                gameData.currentPlayer = gameData.currentPlayer === message.author.id 
+                    ? opponent.id 
+                    : message.author.id;
+
+                // تحديث الرسالة
+                const updatedEmbed = new EmbedBuilder()
+                    .setColor('#3498db')
+                    .setTitle(`🎮 دور ${gameData.currentPlayer === message.author.id ? message.author.tag : opponent.tag}`)
+                    .setDescription('استخدم الأزرار للعب!');
+
+                await i.update({
+                    embeds: [updatedEmbed],
+                    components: updatedComponents
+                });
+            });
+
+            gameCollector.on('end', () => {
+                if (activeGames.has(message.channel.id)) {
+                    activeGames.delete(message.channel.id);
+                    gameMessage.edit({ components: [] });
+                }
+            });
+        });
+
+        collector.on('end', collected => {
+            if (collected.size === 0) {
+                startMessage.edit({ 
+                    content: 'انتهى وقت بدء اللعبة!',
+                    components: [] 
+                });
+            }
+        });
+    }
 };
+
+function checkWinner(board) {
+    const winPatterns = [
+        [0, 1, 2], [3, 4, 5], [6, 7, 8], // صفوف
+        [0, 3, 6], [1, 4, 7], [2, 5, 8], // أعمدة
+        [0, 4, 8], [2, 4, 6] // أقلمة
+    ];
+
+    for (const pattern of winPatterns) {
+        const [a, b, c] = pattern;
+        if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+            return board[a];
+        }
+    }
+
+    if (board.every(cell => cell !== null)) return 'draw';
+    return null;
+                    }
