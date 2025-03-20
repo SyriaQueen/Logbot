@@ -1,11 +1,12 @@
 const { 
     EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, 
-    ModalBuilder, TextInputBuilder, TextInputStyle, PermissionsBitField 
+    ModalBuilder, TextInputBuilder, TextInputStyle, PermissionsBitField, MessageFlags 
 } = require('discord.js');
 const config = require('../config.js');
 
 module.exports = (client) => {
     const suggestionChannelId = config.suggestionChannelId;
+    const suggestionLogChannelId = config.suggestionLogChannelId;
     const userVotes = {};
 
     client.on('messageCreate', async (message) => {
@@ -55,7 +56,7 @@ module.exports = (client) => {
 
         if (interaction.customId.startsWith('accept') || interaction.customId.startsWith('reject')) {
             if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-                return interaction.reply({ content: 'ليس لديك صلاحية لاستخدام هذا الزر.', ephemeral: true });
+                return interaction.reply({ content: 'ليس لديك صلاحية لاستخدام هذا الزر.', flags: MessageFlags.Ephemeral });
             }
 
             const modal = new ModalBuilder()
@@ -74,7 +75,7 @@ module.exports = (client) => {
         } else if (interaction.customId === 'upvote' || interaction.customId === 'downvote') {
             if (!userVotes[messageId]) userVotes[messageId] = new Set();
             if (userVotes[messageId].has(userId)) {
-                return interaction.reply({ content: 'لقد قمت بالتصويت مسبقًا.', ephemeral: true });
+                return interaction.reply({ content: 'لقد قمت بالتصويت مسبقًا.', flags: MessageFlags.Ephemeral });
             }
             userVotes[messageId].add(userId);
 
@@ -111,15 +112,32 @@ module.exports = (client) => {
             .setColor(decision === 'القبول' ? 0x28A745 : 0xDC3545);
 
         await interaction.message.edit({ embeds: [updatedEmbed], components: [updatedButtons] });
-        await interaction.reply({ content: `تم ${decision.toLowerCase()}.`, ephemeral: true });
+        await interaction.reply({ content: `تم ${decision.toLowerCase()}.`, flags: MessageFlags.Ephemeral });
 
         const userId = interaction.customId.split('_')[1];
         const user = await interaction.guild.members.fetch(userId);
         if (user) {
-            // إرسال رسالة خاصة للمستخدم مع رابط الاقتراح
             user.send({
                 content: `تم الرد على اقتراحك ب${decision}. السبب: ${reason}\n\nرابط اقتراحك: [رابط الاقتراح](https://discord.com/channels/${interaction.guild.id}/${interaction.channel.id}/${interaction.message.id})`
             }).catch(console.error);
+        }
+
+        // إرسال الرد إلى قناة السجل
+        const logChannel = interaction.guild.channels.cache.get(suggestionLogChannelId);
+        if (logChannel) {
+            const logEmbed = new EmbedBuilder()
+                .setColor(decision === 'القبول' ? 0x28A745 : 0xDC3545)
+                .setTitle('تم الرد على اقتراح')
+                .setDescription(`**الاقتراح:**\n\`\`\`${originalEmbed.description.replace('**الاقتراح:**\n', '')}\`\`\``)
+                .addFields(
+                    { name: 'الإداري المسؤول', value: `${interaction.user.tag}`, inline: true },
+                    { name: 'الحالة', value: decision, inline: true },
+                    { name: 'السبب', value: reason, inline: false },
+                    { name: 'رابط الاقتراح', value: `[اضغط هنا](https://discord.com/channels/${interaction.guild.id}/${interaction.channel.id}/${interaction.message.id})` }
+                )
+                .setTimestamp();
+
+            logChannel.send({ embeds: [logEmbed] }).catch(console.error);
         }
     });
 };
