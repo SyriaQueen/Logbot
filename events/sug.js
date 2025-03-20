@@ -107,10 +107,19 @@ module.exports = (client) => {
         await interaction.message.edit({ embeds: [updatedEmbed], components: [updatedButtons] });
         await interaction.reply({ content: `تم ${decision.replace('✅ ', '').replace('❌ ', '').toLowerCase()}.`, flags: MessageFlags.Ephemeral });
 
-        const userId = interaction.customId.split('_')[1];
-        const user = await interaction.guild.members.fetch(userId);
-        if (user) {
-            user.send({
+        const customIdParts = interaction.customId.split('_');
+        const suggestionAuthorId = customIdParts[customIdParts.length - 1];
+
+        let suggestionAuthor;
+        try {
+            suggestionAuthor = await interaction.guild.members.fetch(suggestionAuthorId);
+        } catch (error) {
+            console.error('فشل في جلب العضو:', error);
+            suggestionAuthor = null;
+        }
+
+        if (suggestionAuthor) {
+            suggestionAuthor.send({
                 content: `تم الرد على اقتراحك ب${decision.replace('✅ ', '').replace('❌ ', '')}.\n**السبب:** ${reason}\n\n🔗 **رابط الاقتراح:** [اضغط هنا](https://discord.com/channels/${interaction.guild.id}/${interaction.channel.id}/${interaction.message.id})`
             }).catch(console.error);
         }
@@ -118,8 +127,6 @@ module.exports = (client) => {
         const logChannel = interaction.guild.channels.cache.get(suggestionLogChannelId);
         if (logChannel) {
             const suggestionText = originalEmbed.description.replace('**الاقتراح:**\n', '');
-            const suggestionAuthorId = interaction.customId.split('_')[3]; // استخدم الـ ID فقط
-            const suggestionAuthor = await interaction.guild.members.fetch(suggestionAuthorId);
 
             const logEmbed = new EmbedBuilder()
                 .setColor(decisionColor)
@@ -127,7 +134,13 @@ module.exports = (client) => {
                 .setDescription(`📝 **الاقتراح:**\n${suggestionText}`)
                 .addFields(
                     { name: '👤 الإداري المسؤول', value: `**${interaction.user.tag}** - **ID:** ${interaction.user.id}`, inline: true },
-                    { name: '🆔 صاحب الاقتراح', value: `**${suggestionAuthor.tag}** - **ID:** ${suggestionAuthor.id}`, inline: true },
+                    { 
+                        name: '🆔 صاحب الاقتراح', 
+                        value: suggestionAuthor 
+                            ? `**${suggestionAuthor.user.tag}** - **ID:** ${suggestionAuthor.id}` 
+                            : `**مستخدم غير موجود** - **ID:** ${suggestionAuthorId}`, 
+                        inline: true 
+                    },
                     { name: '📌 الحالة', value: `**${decision}**`, inline: true },
                     { name: '✍️ السبب', value: `**${reason}**`, inline: false },
                     { name: '🔗 رابط الاقتراح', value: `[اضغط هنا](https://discord.com/channels/${interaction.guild.id}/${interaction.channel.id}/${interaction.message.id})` }
