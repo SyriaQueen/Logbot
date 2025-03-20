@@ -12,7 +12,15 @@ module.exports = (client) => {
     const loadVotes = () => {
         try {
             const data = fs.readFileSync('votes.json', 'utf8');
-            return JSON.parse(data);
+            const votes = JSON.parse(data);
+
+            // تحويل المصفوفات إلى Set
+            for (const key in votes) {
+                if (votes.hasOwnProperty(key)) {
+                    votes[key] = new Set(votes[key]);
+                }
+            }
+            return votes;
         } catch (error) {
             return {};
         }
@@ -20,7 +28,16 @@ module.exports = (client) => {
 
     // حفظ بيانات التصويتات إلى ملف JSON
     const saveVotes = (votes) => {
-        fs.writeFileSync('votes.json', JSON.stringify(votes, null, 2), 'utf8');
+        const votesToSave = {};
+
+        // تحويل Set إلى مصفوفة قبل حفظها
+        for (const key in votes) {
+            if (votes.hasOwnProperty(key)) {
+                votesToSave[key] = Array.from(votes[key]);
+            }
+        }
+
+        fs.writeFileSync('votes.json', JSON.stringify(votesToSave, null, 2), 'utf8');
     };
 
     // عند إرسال اقتراح جديد
