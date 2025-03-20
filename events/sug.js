@@ -1,28 +1,33 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionsBitField } = require('discord.js');
+const { 
+    EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, 
+    ModalBuilder, TextInputBuilder, TextInputStyle, PermissionsBitField 
+} = require('discord.js');
 const config = require('../config.js');
 
 module.exports = (client) => {
-    const suggestionChannelId = config.SUGGESTION_CHANNEL_ID;
+    const suggestionChannelId = config.suggestionChannelId;
     const userVotes = {};
 
     client.on('messageCreate', async (message) => {
         if (message.channel.id !== suggestionChannelId || message.author.bot) return;
 
+        // تجاهل رسائل الإداريين
         if (message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-            console.log('العضو أدمن، لن يتم تحويل الرسالة.');
+            console.log('العضو أدمن، لن يتم تحويل رسالته.');
             return;
         }
 
-        if (!message.content.trim()) {
-            console.log('الرسالة فارغة، لم يتم إرسال اقتراح.');
+        const messageContent = message.content.trim();
+        if (!messageContent) {
+            console.log('تم إرسال اقتراح فارغ.');
             return;
         }
 
         const suggestionEmbed = new EmbedBuilder()
             .setColor(0x00B2FF)
-            .setDescription(`**الاقتراح :**\n\`\`\`${message.content}\`\`\``)
+            .setDescription(`**الاقتراح:**\n\`\`\`${messageContent}\`\`\``)
             .setTimestamp()
-            .setAuthor({ name: `تم الإرسال بواسطة : ${message.author.tag}`, iconURL: message.author.displayAvatarURL() })
+            .setAuthor({ name: `تم الإرسال بواسطة: ${message.author.tag}`, iconURL: message.author.displayAvatarURL() })
             .setThumbnail(message.guild.iconURL())
             .addFields(
                 { name: 'الإجابة', value: 'لم يتم الجواب بعد :hourglass:', inline: true },
@@ -53,13 +58,23 @@ module.exports = (client) => {
                 return interaction.reply({ content: 'ليس لديك صلاحية لاستخدام هذا الزر.', ephemeral: true });
             }
 
-            return interaction.reply({ content: 'هذه الميزة لم يتم تفعيلها بعد.', ephemeral: true });
-        }
+            const modal = new ModalBuilder()
+                .setCustomId(`response-modal-${interaction.customId}`)
+                .setTitle('رد على الاقتراح');
 
-        if (interaction.customId === 'upvote' || interaction.customId === 'downvote') {
+            const reasonInput = new TextInputBuilder()
+                .setCustomId('reason')
+                .setLabel('السبب')
+                .setStyle(TextInputStyle.Paragraph);
+
+            const actionRow = new ActionRowBuilder().addComponents(reasonInput);
+            modal.addComponents(actionRow);
+
+            await interaction.showModal(modal);
+        } else if (interaction.customId === 'upvote' || interaction.customId === 'downvote') {
             if (!userVotes[messageId]) userVotes[messageId] = new Set();
             if (userVotes[messageId].has(userId)) {
-                return interaction.reply({ content: 'لقد قمت بالتصويت على هذا الاقتراح بالفعل.', ephemeral: true });
+                return interaction.reply({ content: 'لقد قمت بالتصويت مسبقًا.', ephemeral: true });
             }
             userVotes[messageId].add(userId);
 
@@ -71,10 +86,37 @@ module.exports = (client) => {
             if (interaction.customId === 'upvote') upvotes++;
             if (interaction.customId === 'downvote') downvotes++;
 
-            const updatedEmbed = new EmbedBuilder(originalEmbed)
+            const updatedEmbed = EmbedBuilder.from(originalEmbed)
                 .spliceFields(1, 1, { name: 'التصويتات', value: `<a:True:1280855790021771297> ${upvotes} | <a:False:1280855878223921152> ${downvotes}`, inline: true });
 
             await interaction.update({ embeds: [updatedEmbed], components: interaction.message.components });
+        }
+    });
+
+    client.on('interactionCreate', async (interaction) => {
+        if (!interaction.isModalSubmit()) return;
+
+        const reason = interaction.fields.getTextInputValue('reason');
+        const originalEmbed = interaction.message.embeds[0];
+        const decision = interaction.customId.includes('accept') ? 'القبول' : 'الرفض';
+
+        const updatedButtons = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder().setCustomId('upvote').setEmoji({ id: '1280855790021771297', name: 'True', animated: true }).setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('downvote').setEmoji({ id: '1280855878223921152', name: 'False', animated: true }).setStyle(ButtonStyle.Secondary)
+            );
+
+        const updatedEmbed = EmbedBuilder.from(originalEmbed)
+            .spliceFields(0, 1, { name: decision, value: reason, inline: true })
+            .setColor(decision === 'القبول' ? 0x28A745 : 0xDC3545);
+
+        await interaction.message.edit({ embeds: [updatedEmbed], components: [updatedButtons] });
+        await interaction.reply({ content: `تم ${decision.toLowerCase()}.`, ephemeral: true });
+
+        const userId = interaction.customId.split('_')[1];
+        const user = await interaction.guild.members.fetch(userId);
+        if (user) {
+            user.send({ content: `تم الرد على اقتراحك ب${decision}. السبب: ${reason}` }).catch(console.error);
         }
     });
 };
