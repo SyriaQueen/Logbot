@@ -119,14 +119,15 @@ module.exports = (client) => {
         if (logChannel) {
             const suggestionText = originalEmbed.description.replace('**الاقتراح:**\n', '');
             const suggestionAuthorId = interaction.customId.split('_')[1]; // استخدم الـ ID فقط
+            const suggestionAuthor = await interaction.guild.members.fetch(suggestionAuthorId);
 
             const logEmbed = new EmbedBuilder()
                 .setColor(decisionColor)
                 .setTitle('📌 تم الرد على اقتراح')
                 .setDescription(`📝 **الاقتراح:**\n${suggestionText}`)
                 .addFields(
-                    { name: '👤 الإداري المسؤول', value: `**${interaction.user.tag}**`, inline: true },
-                    { name: '🆔 صاحب الاقتراح', value: `**${suggestionAuthorId}**`, inline: true },
+                    { name: '👤 الإداري المسؤول', value: `**${interaction.user.tag}** - **ID:** ${interaction.user.id}`, inline: true },
+                    { name: '🆔 صاحب الاقتراح', value: `**${suggestionAuthor.tag}** - **ID:** ${suggestionAuthor.id}`, inline: true },
                     { name: '📌 الحالة', value: `**${decision}**`, inline: true },
                     { name: '✍️ السبب', value: `**${reason}**`, inline: false },
                     { name: '🔗 رابط الاقتراح', value: `[اضغط هنا](https://discord.com/channels/${interaction.guild.id}/${interaction.channel.id}/${interaction.message.id})` }
