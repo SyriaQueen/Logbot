@@ -12,16 +12,23 @@ module.exports = (client) => {
     client.on('messageCreate', async (message) => {
         if (message.channel.id !== suggestionChannelId || message.author.bot) return;
 
-        if (message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
+        // تجاهل رسائل الإداريين
+        if (message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+            console.log('العضو أدمن، لن يتم تحويل رسالته.');
+            return;
+        }
 
         const messageContent = message.content.trim();
-        if (!messageContent) return;
+        if (!messageContent) {
+            console.log('تم إرسال اقتراح فارغ.');
+            return;
+        }
 
         const suggestionEmbed = new EmbedBuilder()
             .setColor(0x00B2FF)
-            .setDescription(`**الاقتراح:**\n${messageContent}`)
+            .setDescription(`**الاقتراح:**\n\`\`\`${messageContent}\`\`\``)
             .setTimestamp()
-            .setAuthor({ name: `تم الإرسال بواسطة: ${message.author.tag}`, iconURL: message.author.displayAvatarURL() })
+            .setAuthor({ name: `تم الإرسال بواسطة: ${message.author.username} - ${message.author.id}`, iconURL: message.author.displayAvatarURL() })
             .setThumbnail(message.guild.iconURL())
             .addFields(
                 { name: 'الإجابة', value: 'لم يتم الجواب بعد :hourglass:', inline: true },
@@ -92,8 +99,7 @@ module.exports = (client) => {
 
         const reason = interaction.fields.getTextInputValue('reason');
         const originalEmbed = interaction.message.embeds[0];
-        const decision = interaction.customId.includes('accept') ? '✅ القبول' : '❌ الرفض';
-        const decisionColor = interaction.customId.includes('accept') ? 0x28A745 : 0xDC3545;
+        const decision = interaction.customId.includes('accept') ? 'القبول' : 'الرفض';
 
         const updatedButtons = new ActionRowBuilder()
             .addComponents(
@@ -103,35 +109,33 @@ module.exports = (client) => {
 
         const updatedEmbed = EmbedBuilder.from(originalEmbed)
             .spliceFields(0, 1, { name: decision, value: reason, inline: true })
-            .setColor(decisionColor);
+            .setColor(decision === 'القبول' ? 0x28A745 : 0xDC3545);
 
         await interaction.message.edit({ embeds: [updatedEmbed], components: [updatedButtons] });
-        await interaction.reply({ content: `تم ${decision.replace('✅ ', '').replace('❌ ', '').toLowerCase()}.`, flags: MessageFlags.Ephemeral });
+        await interaction.reply({ content: `تم ${decision.toLowerCase()}.`, flags: MessageFlags.Ephemeral });
 
         const userId = interaction.customId.split('_')[1];
         const user = await interaction.guild.members.fetch(userId);
         if (user) {
             user.send({
-                content: `تم الرد على اقتراحك ب${decision.replace('✅ ', '').replace('❌ ', '')}.\n**السبب:** ${reason}\n\n🔗 **رابط الاقتراح:** [اضغط هنا](https://discord.com/channels/${interaction.guild.id}/${interaction.channel.id}/${interaction.message.id})`
+                content: `تم الرد على اقتراحك ب${decision}. السبب: ${reason}\n\nرابط اقتراحك: [رابط الاقتراح](https://discord.com/channels/${interaction.guild.id}/${interaction.channel.id}/${interaction.message.id})`
             }).catch(console.error);
         }
 
+        // إرسال الرد إلى قناة السجل
         const logChannel = interaction.guild.channels.cache.get(suggestionLogChannelId);
         if (logChannel) {
-            const suggestionText = originalEmbed.description.replace('**الاقتراح:**\n', '');
-
             const logEmbed = new EmbedBuilder()
-                .setColor(decisionColor)
-                .setTitle('📌 تم الرد على اقتراح')
-                .setDescription(`📝 **الاقتراح:**\n${suggestionText}`)
+                .setColor(decision === 'القبول' ? 0x28A745 : 0xDC3545)
+                .setTitle('تم الرد على اقتراح')
+                .setDescription(`**الاقتراح:**\n\`\`\`${originalEmbed.description.replace('**الاقتراح:**\n', '')}\`\`\``)
                 .addFields(
-                    { name: '👤 الإداري المسؤول', value: `**${interaction.user.tag}**`, inline: true },
-                    { name: '📌 الحالة', value: `**${decision}**`, inline: true },
-                    { name: '✍️ السبب', value: `**${reason}**`, inline: false },
-                    { name: '🔗 رابط الاقتراح', value: `[اضغط هنا](https://discord.com/channels/${interaction.guild.id}/${interaction.channel.id}/${interaction.message.id})` }
+                    { name: 'الإداري المسؤول', value: `${interaction.user.username} - ${interaction.user.id}`, inline: true },
+                    { name: 'صاحب الاقتراح', value: `${user.username} - ${user.id}`, inline: true },
+                    { name: 'الحالة', value: decision, inline: true },
+                    { name: 'السبب', value: reason, inline: false },
+                    { name: 'رابط الاقتراح', value: `[اضغط هنا](https://discord.com/channels/${interaction.guild.id}/${interaction.channel.id}/${interaction.message.id})` }
                 )
-                .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 1024 }))
-                .setFooter({ text: '📅 تم الرد في', iconURL: interaction.guild.iconURL() })
                 .setTimestamp();
 
             logChannel.send({ embeds: [logEmbed] }).catch(console.error);
