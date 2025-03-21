@@ -4,16 +4,16 @@ const config = require('../config.js');
 
 const imageQuestions = [
     {
-        image: 'https://example.com/ambed-image.jpg',
-        answer: 'امبيد'
+        image: 'https://i.postimg.cc/0yPm3f2V/D3m.png',
+        answer: 'دعم'
     },
     {
-        image: 'https://example.com/discord-image.png',
-        answer: 'ديسكورد'
+        image: 'https://i.postimg.cc/Mp3TDbcM/Dr3.png',
+        answer: 'درع'
     },
     {
-        image: 'https://example.com/bot-image.jpg',
-        answer: 'بوت'
+        image: 'https://i.postimg.cc/CKZK6BDv/Taam.png',
+        answer: 'طعام'
     },
     // إضافة المزيد من الصور والأجوبة هنا
 ];
@@ -60,13 +60,12 @@ module.exports = {
 
         const gameEmbed = new EmbedBuilder()
             .setColor('#5865F2')
-            .setTitle('🖼️ سباق الصور - AMBED')
-            .setDescription('**أول شخص يكتب الإجابة الصحيحة للصورة يفوز!**')
+            .setTitle('أسرع -')
+            .setDescription('**أول شخص يكتب الكلمة التي في الصورة يفوز!**')
             .setImage(randomImage.image)
             .addFields(
                 { name: '⏳ الوقت المتبقي', value: `${timeLeft} ثانية`, inline: true },
                 { name: '🎯 الحالة', value: 'جارية', inline: true },
-                { name: '💡 مساعدة', value: 'الإجابة هي كلمة واحدة فقط', inline: false }
             )
             .setFooter({ text: `بدأت بواسطة: ${message.author.username}`, iconURL: message.author.displayAvatarURL() });
 
@@ -127,7 +126,7 @@ module.exports = {
                     const winEmbed = new EmbedBuilder()
                         .setColor('#57F287')
                         .setTitle(`🎉 فوز!`)
-                        .setDescription(`**الإجابة الصحيحة:** \`${gameData.correctAnswer}\``)
+                        .setDescription(`**الكلمة الصحيحة:** \`${gameData.correctAnswer}\``)
                         .addFields(
                             { name: 'الفائز', value: msg.author.toString(), inline: true },
                             { name: 'الوقت', value: `${timeTaken} ثانية`, inline: true }
@@ -164,7 +163,7 @@ module.exports = {
                         const timeoutEmbed = new EmbedBuilder()
                             .setColor('#ED4245')
                             .setTitle('⏰ انتهى الوقت!')
-                            .setDescription(`**الإجابة الصحيحة كانت:** \`${gameData.correctAnswer}\``)
+                            .setDescription(`**الكلمة الصحيحة كانت:** \`${gameData.correctAnswer}\``)
                             .setImage(gameData.imageUrl);
 
                         await sentMessage.reply({ embeds: [timeoutEmbed] });
