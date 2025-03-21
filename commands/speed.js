@@ -96,15 +96,14 @@ module.exports = {
                 
                 gameEmbed
                     .spliceFields(1, 1, { name: '🎯 الحالة', value: 'منتهية' })
-                    .setColor('#57F287');
+                    .setColor('#ED4245');
 
                 const winEmbed = new EmbedBuilder()
                     .setColor('#57F287')
                     .setTitle(`🎉 ${msg.author.username} فاز!`)
                     .addFields(
                         { name: 'الكلمة', value: targetWord, inline: true },
-                        { name: 'الوقت', value: `${timeTaken} ثانية`, inline: true },
-                        { name: 'الدقة', value: `${calculateAccuracy(timeTaken)}%`, inline: true }
+                        { name: 'الوقت', value: `${timeTaken} ثانية`, inline: true }
                     )
                     .setThumbnail(msg.author.displayAvatarURL());
 
@@ -121,7 +120,7 @@ module.exports = {
                 gameEmbed
                     .spliceFields(0, 1, { name: '⏳ الوقت المتبقي', value: '0 ثانية' })
                     .spliceFields(1, 1, { name: '🎯 الحالة', value: 'منتهية' })
-                    .setColor(gameData.winner ? '#57F287' : '#ED4245');
+                    .setColor('#ED4245');
 
                 await sentMessage.edit({ embeds: [gameEmbed] });
 
@@ -139,7 +138,3 @@ module.exports = {
         });
     }
 };
-
-function calculateAccuracy(timeTaken) {
-    return Math.max(0, 100 - Math.floor((timeTaken / 15) * 100));
-            }
