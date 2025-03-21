@@ -2,15 +2,20 @@
 const { EmbedBuilder } = require('discord.js');
 const config = require('../config.js');
 
-const words = [
-    'امبيد',
-    'ديسكورد',
-    'بوت',
-    'جافاسكربت',
-    'تذكرة',
-    'دعم',
-    'برمجة',
-    'خادم'
+const imageQuestions = [
+    {
+        image: 'https://example.com/ambed-image.jpg',
+        answer: 'امبيد'
+    },
+    {
+        image: 'https://example.com/discord-image.png',
+        answer: 'ديسكورد'
+    },
+    {
+        image: 'https://example.com/bot-image.jpg',
+        answer: 'بوت'
+    },
+    // إضافة المزيد من الصور والأجوبة هنا
 ];
 
 const activeGames = new Map();
@@ -49,17 +54,19 @@ module.exports = {
             });
         }
 
-        const targetWord = words[Math.floor(Math.random() * words.length)];
+        const randomImage = imageQuestions[Math.floor(Math.random() * imageQuestions.length)];
         const timeLimit = 15000;
         let timeLeft = Math.floor(timeLimit / 1000);
 
         const gameEmbed = new EmbedBuilder()
             .setColor('#5865F2')
-            .setTitle('⚡ سباق السرعة - AMBED')
-            .setDescription(`**أول شخص يكتب الكلمة التالية يفوز:**\n\`\`\`${targetWord}\`\`\``)
+            .setTitle('🖼️ سباق الصور - AMBED')
+            .setDescription('**أول شخص يكتب الإجابة الصحيحة للصورة يفوز!**')
+            .setImage(randomImage.image)
             .addFields(
                 { name: '⏳ الوقت المتبقي', value: `${timeLeft} ثانية`, inline: true },
-                { name: '🎯 الحالة', value: 'جارية', inline: true }
+                { name: '🎯 الحالة', value: 'جارية', inline: true },
+                { name: '💡 مساعدة', value: 'الإجابة هي كلمة واحدة فقط', inline: false }
             )
             .setFooter({ text: `بدأت بواسطة: ${message.author.username}`, iconURL: message.author.displayAvatarURL() });
 
@@ -91,7 +98,8 @@ module.exports = {
 
         const gameData = {
             messageId: sentMessage.id,
-            targetWord,
+            correctAnswer: randomImage.answer,
+            imageUrl: randomImage.image,
             startTime: Date.now(),
             interval: updateTimer,
             winner: null
@@ -106,7 +114,7 @@ module.exports = {
         collector.on('collect', async (msg) => {
             if (gameData.winner) return;
             
-            if (msg.content.toLowerCase() === targetWord.toLowerCase()) {
+            if (msg.content.toLowerCase() === gameData.correctAnswer.toLowerCase()) {
                 gameData.winner = msg.author;
                 const timeTaken = ((Date.now() - gameData.startTime) / 1000).toFixed(2);
                 
@@ -119,11 +127,13 @@ module.exports = {
                     const winEmbed = new EmbedBuilder()
                         .setColor('#57F287')
                         .setTitle(`🎉 فوز!`)
-                        .setDescription(`أجبت بشكل صحيح خلال ${timeTaken} ثانية`)
+                        .setDescription(`**الإجابة الصحيحة:** \`${gameData.correctAnswer}\``)
                         .addFields(
-                            { name: 'الكلمة', value: targetWord, inline: true },
-                            { name: 'الفائز', value: msg.author.toString(), inline: true }
-                        );
+                            { name: 'الفائز', value: msg.author.toString(), inline: true },
+                            { name: 'الوقت', value: `${timeTaken} ثانية`, inline: true }
+                        )
+                        .setImage(gameData.imageUrl)
+                        .setThumbnail(msg.author.displayAvatarURL());
 
                     await msg.reply({ 
                         embeds: [winEmbed],
@@ -151,14 +161,13 @@ module.exports = {
                     await sentMessage.edit({ embeds: [gameEmbed] });
 
                     if (!gameData.winner) {
-                        await sentMessage.reply({
-                            embeds: [
-                                new EmbedBuilder()
-                                    .setColor('#ED4245')
-                                    .setTitle('⏰ انتهى الوقت!')
-                                    .setDescription(`لم يفز أحد!\nالكلمة كانت: \`${targetWord}\``)
-                            ]
-                        });
+                        const timeoutEmbed = new EmbedBuilder()
+                            .setColor('#ED4245')
+                            .setTitle('⏰ انتهى الوقت!')
+                            .setDescription(`**الإجابة الصحيحة كانت:** \`${gameData.correctAnswer}\``)
+                            .setImage(gameData.imageUrl);
+
+                        await sentMessage.reply({ embeds: [timeoutEmbed] });
                     }
                 } catch (err) {
                     console.error('Error finalizing game:', err);
