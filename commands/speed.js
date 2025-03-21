@@ -26,29 +26,41 @@ module.exports = {
         }
 
         const targetWord = words[Math.floor(Math.random() * words.length)];
-        const startTime = Date.now();
         const timeLimit = 15000;
+        let timeLeft = timeLimit / 1000;
 
         const gameEmbed = new EmbedBuilder()
             .setColor('#5865F2')
             .setTitle('⚡ لعبة السرعة - أمبيد')
             .setDescription(`**أكتب الكلمة التالية بسرعة:**\n\`\`\`${targetWord}\`\`\``)
             .addFields(
-                { name: 'المدة', value: `⏳ ${timeLimit/1000} ثواني`, inline: true },
+                { name: 'الوقت المتبقي', value: `⏳ ${timeLeft} ثانية`, inline: true },
                 { name: 'الحالة', value: '🟢 جاري التشغيل', inline: true }
             )
             .setThumbnail('https://cdn-icons-png.flaticon.com/512/3132/3132693.png')
             .setFooter({ text: message.author.username, iconURL: message.author.displayAvatarURL() });
 
-        const sentMessage = await message.reply({ 
-            embeds: [gameEmbed],
-            allowedMentions: { repliedUser: false }
-        });
+        const sentMessage = await message.channel.send({ embeds: [gameEmbed] });
+        
+        // حذف رسالة الأمر الأصلية
+        if (message.deletable) message.delete().catch(console.error);
+
+        const updateTimer = setInterval(() => {
+            timeLeft--;
+            gameEmbed.spliceFields(0, 1, { 
+                name: 'الوقت المتبقي', 
+                value: `⏳ ${timeLeft} ثانية`, 
+                inline: true 
+            });
+            
+            sentMessage.edit({ embeds: [gameEmbed] });
+        }, 1000);
 
         activeGames.set(message.channel.id, {
             messageId: sentMessage.id,
             targetWord,
-            startTime
+            startTime: Date.now(),
+            interval: updateTimer
         });
 
         const filter = m => m.author.id === message.author.id;
@@ -60,8 +72,17 @@ module.exports = {
 
         collector.on('collect', async (msg) => {
             const gameData = activeGames.get(message.channel.id);
+            clearInterval(gameData.interval);
+            
             const endTime = Date.now();
             const timeTaken = ((endTime - gameData.startTime) / 1000).toFixed(2);
+
+            // تحديث الإيمبد الأخير
+            gameEmbed
+                .spliceFields(1, 1, { name: 'الحالة', value: '🔴 منتهية' })
+                .setColor('#ED4245');
+            
+            await sentMessage.edit({ embeds: [gameEmbed] });
 
             if (msg.content.toLowerCase() === gameData.targetWord.toLowerCase()) {
                 const winEmbed = new EmbedBuilder()
@@ -73,10 +94,12 @@ module.exports = {
                         { name: 'الوقت', value: `${timeTaken} ثانية`, inline: true },
                         { name: 'الدقة', value: `${calculateAccuracy(timeTaken)}%`, inline: true }
                     )
-                    .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
-                    .setTimestamp();
+                    .setThumbnail(message.author.displayAvatarURL({ dynamic: true }));
 
-                msg.reply({ embeds: [winEmbed] });
+                sentMessage.reply({ 
+                    embeds: [winEmbed],
+                    allowedMentions: { repliedUser: false }
+                });
             } else {
                 const loseEmbed = new EmbedBuilder()
                     .setColor('#ED4245')
@@ -84,15 +107,30 @@ module.exports = {
                     .setDescription(`**الإجابة الصحيحة:**\n\`${gameData.targetWord}\``)
                     .setFooter({ text: 'حاول مرة أخرى!' });
 
-                msg.reply({ embeds: [loseEmbed] });
+                sentMessage.reply({ 
+                    embeds: [loseEmbed],
+                    allowedMentions: { repliedUser: false }
+                });
             }
         });
 
         collector.on('end', (collected) => {
             const gameData = activeGames.get(message.channel.id);
+            clearInterval(gameData.interval);
             activeGames.delete(message.channel.id);
 
             if (collected.size === 0) {
+                gameEmbed
+                    .spliceFields(0, 1, { 
+                        name: 'الوقت المتبقي', 
+                        value: `⏳ 0 ثانية`, 
+                        inline: true 
+                    })
+                    .spliceFields(1, 1, { name: 'الحالة', value: '🔴 منتهية' })
+                    .setColor('#ED4245');
+
+                sentMessage.edit({ embeds: [gameEmbed] });
+
                 const timeoutEmbed = new EmbedBuilder()
                     .setColor('#FEE75C')
                     .setTitle('⏰ انتهى الوقت!')
@@ -102,14 +140,7 @@ module.exports = {
                         { name: 'الوقت المسموح', value: `${timeLimit/1000} ثانية` }
                     );
 
-                sentMessage.edit({ 
-                    embeds: [gameEmbed
-                        .spliceFields(1, 1, { name: 'الحالة', value: '🔴 منتهية' })
-                        .setColor('#ED4245')
-                    ] 
-                });
-
-                message.reply({ 
+                sentMessage.reply({ 
                     embeds: [timeoutEmbed],
                     allowedMentions: { repliedUser: false }
                 });
