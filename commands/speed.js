@@ -2,7 +2,6 @@
 const { EmbedBuilder } = require('discord.js');
 const config = require('../config.js');
 
-// قائمة الكلمات الممكنة للعبة
 const words = [
     'امبيد',
     'ديسكورد',
@@ -14,80 +13,113 @@ const words = [
     'خادم'
 ];
 
-// خريطة لتتبع الألعاب النشطة (منع التكرار)
 const activeGames = new Map();
 
 module.exports = {
     name: 'أسرع',
     async execute(message, args, client) {
-        // التحقق من وجود لعبة نشطة في القناة
         if (activeGames.has(message.channel.id)) {
-            return message.reply('يوجد لعبة نشطة بالفعل في هذه القناة!');
+            return message.reply({ 
+                content: '⚠️ يوجد لعبة نشطة حالياً في هذه القناة!',
+                allowedMentions: { repliedUser: false }
+            });
         }
 
-        // توليد كلمة عشوائية
         const targetWord = words[Math.floor(Math.random() * words.length)];
         const startTime = Date.now();
+        const timeLimit = 15000;
 
-        // إنشاء إيمبد للعبة
         const gameEmbed = new EmbedBuilder()
-            .setColor('#00FF00')
-            .setTitle('🎮 لعبة أسرع في أمبيد 🏁')
-            .setDescription(`**اكتب الكلمة التالية بأسرع ما يمكن:**\n\`${targetWord}\``)
-            .setFooter({ text: 'لديك 15 ثانية لكتابة الكورة بشكل صحيح!' });
+            .setColor('#5865F2')
+            .setTitle('⚡ لعبة السرعة - أمبيد')
+            .setDescription(`**أكتب الكلمة التالية بسرعة:**\n\`\`\`${targetWord}\`\`\``)
+            .addFields(
+                { name: 'المدة', value: `⏳ ${timeLimit/1000} ثواني`, inline: true },
+                { name: 'الحالة', value: '🟢 جاري التشغيل', inline: true }
+            )
+            .setThumbnail('https://cdn-icons-png.flaticon.com/512/3132/3132693.png')
+            .setFooter({ text: message.author.username, iconURL: message.author.displayAvatarURL() });
 
-        const sentMessage = await message.channel.send({ embeds: [gameEmbed] });
+        const sentMessage = await message.reply({ 
+            embeds: [gameEmbed],
+            allowedMentions: { repliedUser: false }
+        });
 
-        // تحديد القناة كلعبة نشطة
-        activeGames.set(message.channel.id, true);
+        activeGames.set(message.channel.id, {
+            messageId: sentMessage.id,
+            targetWord,
+            startTime
+        });
 
-        // إنشاء مجمع للرسائل
         const filter = m => m.author.id === message.author.id;
         const collector = message.channel.createMessageCollector({ 
             filter,
-            time: 15000,
+            time: timeLimit,
             max: 1
         });
 
         collector.on('collect', async (msg) => {
+            const gameData = activeGames.get(message.channel.id);
             const endTime = Date.now();
-            const timeTaken = ((endTime - startTime) / 1000).toFixed(2);
+            const timeTaken = ((endTime - gameData.startTime) / 1000).toFixed(2);
 
-            if (msg.content.toLowerCase() === targetWord.toLowerCase()) {
+            if (msg.content.toLowerCase() === gameData.targetWord.toLowerCase()) {
                 const winEmbed = new EmbedBuilder()
-                    .setColor('#00FF00')
-                    .setTitle('🎉 فوز! 🏆')
-                    .setDescription(`**${message.author.username}** أتممت التحدي بنجاح!`)
+                    .setColor('#57F287')
+                    .setTitle('🎊 فوز مذهل!')
+                    .setDescription(`**${message.author.username}** أكمل التحدي بنجاح`)
                     .addFields(
-                        { name: 'الكلمة المطلوبة', value: targetWord, inline: true },
-                        { name: 'الوقت المستغرق', value: `${timeTaken} ثانية`, inline: true }
+                        { name: 'الكلمة', value: gameData.targetWord, inline: true },
+                        { name: 'الوقت', value: `${timeTaken} ثانية`, inline: true },
+                        { name: 'الدقة', value: `${calculateAccuracy(timeTaken)}%`, inline: true }
                     )
-                    .setThumbnail(message.author.displayAvatarURL());
-                
+                    .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
+                    .setTimestamp();
+
                 msg.reply({ embeds: [winEmbed] });
             } else {
                 const loseEmbed = new EmbedBuilder()
-                    .setColor('#FF0000')
-                    .setTitle('❌ خسارة!')
-                    .setDescription(`الإجابة الصحيحة كانت: **${targetWord}**`)
+                    .setColor('#ED4245')
+                    .setTitle('❌ إجابة خاطئة')
+                    .setDescription(`**الإجابة الصحيحة:**\n\`${gameData.targetWord}\``)
                     .setFooter({ text: 'حاول مرة أخرى!' });
-                
+
                 msg.reply({ embeds: [loseEmbed] });
             }
         });
 
         collector.on('end', (collected) => {
-            // إزالة القناة من الألعاب النشطة
+            const gameData = activeGames.get(message.channel.id);
             activeGames.delete(message.channel.id);
 
             if (collected.size === 0) {
                 const timeoutEmbed = new EmbedBuilder()
-                    .setColor('#FFA500')
+                    .setColor('#FEE75C')
                     .setTitle('⏰ انتهى الوقت!')
-                    .setDescription('لم تقم بإرسال إجابة في الوقت المحدد');
-                
-                message.channel.send({ embeds: [timeoutEmbed] });
+                    .setDescription('لم يتم إرسال إجابة خلال المدة المحددة')
+                    .addFields(
+                        { name: 'الكلمة المطلوبة', value: gameData.targetWord },
+                        { name: 'الوقت المسموح', value: `${timeLimit/1000} ثانية` }
+                    );
+
+                sentMessage.edit({ 
+                    embeds: [gameEmbed
+                        .spliceFields(1, 1, { name: 'الحالة', value: '🔴 منتهية' })
+                        .setColor('#ED4245')
+                    ] 
+                });
+
+                message.reply({ 
+                    embeds: [timeoutEmbed],
+                    allowedMentions: { repliedUser: false }
+                });
             }
         });
     }
 };
+
+function calculateAccuracy(timeTaken) {
+    const maxTime = 15;
+    const accuracy = ((maxTime - timeTaken) / maxTime) * 100;
+    return Math.max(0, Math.min(100, Math.round(accuracy)));
+}
