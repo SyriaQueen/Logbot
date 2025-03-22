@@ -4,16 +4,16 @@ const config = require('../../config.js');
 
 const imageQuestions = [
     {
-        image: 'https://i.postimg.cc/0yPm3f2V/D3m.png',
-        answer: 'دعم'
+        image: 'https://i.postimg.cc/jjQCNnJP/1.png',
+        answer: '63'
     },
     {
-        image: 'https://i.postimg.cc/Mp3TDbcM/Dr3.png',
-        answer: 'درع'
+        image: 'https://i.postimg.cc/kgTp5fTb/B7r.png',
+        answer: 'أزرق'
     },
     {
-        image: 'https://i.postimg.cc/CKZK6BDv/Taam.png',
-        answer: 'طعام'
+        image: 'https://i.postimg.cc/6QT14nP1/Bkr.png',
+        answer: 'أبو بكر الصديق'
     },
     // إضافة المزيد من الصور والأجوبة هنا
 ];
@@ -61,8 +61,8 @@ module.exports = {
 
         const gameEmbed = new EmbedBuilder()
             .setColor('#5865F2')
-            .setTitle('أسرع -')
-            .setDescription('**أول شخص يكتب الكلمة التي في الصورة يفوز!**')
+            .setTitle('سؤال -')
+            .setDescription('**أول شخص يجاوب عن السؤال الذي في الصورة يفوز!**')
             .setImage(randomImage.image)
             .addFields(
                 { name: '⏳ الوقت المتبقي', value: `${timeLeft} ثانية`, inline: true },
