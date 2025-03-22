@@ -1,5 +1,5 @@
 const fs = require('fs');
-const path = require('path'); // إضافة مكتبة path للتعامل مع المسارات
+const path = require('path'); // أضف هذا السطر
 const { Client, GatewayIntentBits } = require('discord.js');
 const config = require('./config.js');
 
@@ -13,24 +13,28 @@ const client = new Client({
 
 client.commands = new Map();
 
-// دالة تكرارية لقراءة الملفات من المجلدات الفرعية
-function loadCommands(dir) {
-    const files = fs.readdirSync(dir, { withFileTypes: true }); // قراءة محتويات المجلد مع نوع الملف
+// دالة لقراءة الملفات بشكل عاودي
+function readCommands(dir) {
+    const files = fs.readdirSync(dir, { withFileTypes: true });
+    let commandFiles = [];
     for (const file of files) {
-        const fullPath = path.join(dir, file.name); // المسار الكامل للملف أو المجلد
+        const fullPath = path.join(dir, file.name);
         if (file.isDirectory()) {
-            // إذا كان مجلدًا، استمر في البحث داخله
-            loadCommands(fullPath);
-        } else if (file.name.endsWith('.js')) {
-            // إذا كان ملفًا وينتهي بـ .js، قم بتحميله
-            const command = require(`./${fullPath}`); // تحميل الملف
-            client.commands.set(command.name, command);
+            commandFiles = commandFiles.concat(readCommands(fullPath));
+        } else if (file.isFile() && file.name.endsWith('.js')) {
+            commandFiles.push(fullPath);
         }
     }
+    return commandFiles;
 }
 
-// تحميل الأوامر من مجلد commands
-loadCommands('./commands');
+// قراءة جميع الملفات في مجلد commands والمجلدات الفرعية
+const commandFiles = readCommands(path.join(__dirname, 'commands'));
+
+for (const filePath of commandFiles) {
+    const command = require(filePath);
+    client.commands.set(command.name, command);
+}
 
 client.once('ready', () => {
     console.log(`تم تسجيل الدخول كـ ${client.user.tag}!`);
@@ -40,7 +44,7 @@ client.once('ready', () => {
 const eventFiles = fs.readdirSync('./events').filter(file => file.endsWith('.js'));
 for (const file of eventFiles) {
     const event = require(`./events/${file}`);
-    event(client); // تمرير client إلى كل حدث
+    event(client);
 }
 
 client.on('messageCreate', async (message) => {
