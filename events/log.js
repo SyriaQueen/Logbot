@@ -16,7 +16,7 @@ module.exports = (client) => {
         if (!logChannel) return;
 
         try {
-            // جلب جميع المرفقات
+            // جلب المرفقات
             const attachments = [];
             for (const attachment of message.attachments.values()) {
                 try {
@@ -35,7 +35,7 @@ module.exports = (client) => {
 
             if (attachments.length === 0) return;
 
-            // تصنيف المرفقات
+            // التصنيف
             const images = attachments.filter(a => a.type.name === 'صورة');
             const videos = attachments.filter(a => a.type.name === 'فيديو');
             const documents = attachments.filter(a => a.type.name === 'مستند');
@@ -53,7 +53,7 @@ module.exports = (client) => {
 
             await logChannel.send({ embeds: [mainEmbed] });
 
-            // إرسال الصور
+            // الصور
             for (const img of images) {
                 const imgEmbed = new EmbedBuilder()
                     .setColor('#FFA500')
@@ -72,7 +72,7 @@ module.exports = (client) => {
                 });
             }
 
-            // إرسال الفيديوهات
+            // الفيديوهات
             for (const video of videos) {
                 const videoEmbed = new EmbedBuilder()
                     .setColor('#0099FF')
@@ -84,39 +84,55 @@ module.exports = (client) => {
                     )
                     .setTimestamp();
 
+                // إرسال الأمبيد أولًا
+                await logChannel.send({ embeds: [videoEmbed] });
+                
+                // إرسال الفيديو بعد الأمبيد
                 await logChannel.send({
-                    embeds: [videoEmbed],
                     files: [{ attachment: video.data, name: video.name }]
                 });
             }
 
-            // إرسال إمبدات المستندات والملفات العامة
+            // المستندات
             if (documents.length > 0) {
                 const docEmbed = new EmbedBuilder()
                     .setColor('#2ECC71')
                     .setTitle('📄 مستندات محذوفة')
-                    .setDescription(`**عدد المستندات:** ${documents.length}`)
+                    .addFields(
+                        { name: 'العدد', value: `${documents.length} ملفات`, inline: true },
+                        { name: 'الأنواع', value: [...new Set(documents.map(d => d.type.ext))].join(', '), inline: true }
+                    )
                     .setTimestamp();
 
                 await logChannel.send({ embeds: [docEmbed] });
+                
+                // إرسال كل مستند بعد الأمبيد
+                for (const doc of documents) {
+                    await logChannel.send({
+                        files: [{ attachment: doc.data, name: doc.name }]
+                    });
+                }
             }
 
+            // الملفات العامة
             if (others.length > 0) {
                 const otherEmbed = new EmbedBuilder()
                     .setColor('#808080')
                     .setTitle('📁 ملفات عامة محذوفة')
-                    .setDescription(`**عدد الملفات:** ${others.length}`)
+                    .addFields(
+                        { name: 'العدد', value: `${others.length} ملفات`, inline: true },
+                        { name: 'الأنواع', value: [...new Set(others.map(o => o.type.ext))].join(', '), inline: true }
+                    )
                     .setTimestamp();
 
                 await logChannel.send({ embeds: [otherEmbed] });
-            }
-
-            // إرسال جميع الملفات بعد الإمبدتات
-            const allFiles = [...documents, ...others];
-            for (const file of allFiles) {
-                await logChannel.send({
-                    files: [{ attachment: file.data, name: file.name }]
-                });
+                
+                // إرسال كل ملف عام بعد الأمبيد
+                for (const otherFile of others) {
+                    await logChannel.send({
+                        files: [{ attachment: otherFile.data, name: otherFile.name }]
+                    });
+                }
             }
 
         } catch (error) {
@@ -125,7 +141,7 @@ module.exports = (client) => {
     });
 };
 
-// دالة تحديد نوع الملف
+// دالة تحديد النوع
 function getFileType(filename) {
     const ext = (filename.split('.').pop() || 'unknown').toLowerCase();
     const types = {
