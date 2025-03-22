@@ -1,5 +1,5 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
-const config = require('../config.js');
+const config = require('../../config.js');
 
 const activeGames = new Map();
 const gameMessages = new Map();
