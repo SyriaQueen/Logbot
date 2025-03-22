@@ -22,7 +22,7 @@ const activeGames = new Map();
 let deletionListenerAdded = false;
 
 module.exports = {
-    name: 'أسرع',
+    name: 'سؤال',
     async execute(message, args, client) {
         if (!deletionListenerAdded) {
             client.on('messageDelete', async (deletedMessage) => {
