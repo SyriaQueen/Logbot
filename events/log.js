@@ -16,6 +16,7 @@ module.exports = (client) => {
         if (!logChannel) return;
 
         try {
+            // جلب جميع المرفقات
             const attachments = [];
             for (const attachment of message.attachments.values()) {
                 try {
@@ -34,6 +35,7 @@ module.exports = (client) => {
 
             if (attachments.length === 0) return;
 
+            // تصنيف المرفقات
             const images = attachments.filter(a => a.type.name === 'صورة');
             const videos = attachments.filter(a => a.type.name === 'فيديو');
             const documents = attachments.filter(a => a.type.name === 'مستند');
@@ -41,6 +43,7 @@ module.exports = (client) => {
                 !['صورة', 'فيديو', 'مستند'].includes(a.type.name)
             );
 
+            // الإمبد الرئيسي
             const mainEmbed = new EmbedBuilder()
                 .setColor('#FF0000')
                 .setTitle('🗑️ تم حذف مرفقات')
@@ -48,103 +51,71 @@ module.exports = (client) => {
                 .setTimestamp()
                 .setFooter({ text: 'سجل الحذف', iconURL: message.author.displayAvatarURL() });
 
-            if (images.length > 0) {
-                mainEmbed
-                    .setImage(`attachment://${images[0].name}`)
-                    .addFields({
-                        name: '🖼️ الملف الرئيسي',
-                        value: `**النوع:** ${images[0].type.name}\n**الحجم:** ${formatBytes(images[0].size)}`
-                    });
-            }
+            await logChannel.send({ embeds: [mainEmbed] });
 
-            await logChannel.send({
-                embeds: [mainEmbed],
-                files: images.length > 0 ? [{
-                    attachment: images[0].data,
-                    name: images[0].name
-                }] : []
-            });
-
-            for (const img of images.slice(1)) {
+            // إرسال الصور
+            for (const img of images) {
                 const imgEmbed = new EmbedBuilder()
                     .setColor('#FFA500')
-                    .setTitle('🖼️ صورة إضافية')
-                    .setDescription(`**الإمتداد:** .${img.type.ext}\n**الحجم:** ${formatBytes(img.size)}`)
+                    .setTitle('🖼️ صورة محذوفة')
+                    .addFields(
+                        { name: 'الاسم', value: img.name, inline: true },
+                        { name: 'النوع', value: img.type.name, inline: true },
+                        { name: 'الحجم', value: formatBytes(img.size), inline: true }
+                    )
                     .setImage(`attachment://${img.name}`)
                     .setTimestamp();
 
                 await logChannel.send({
                     embeds: [imgEmbed],
-                    files: [{
-                        attachment: img.data,
-                        name: img.name
-                    }]
+                    files: [{ attachment: img.data, name: img.name }]
                 });
             }
 
-            if (videos.length > 0) {
-                for (const video of videos) {
-                    const videoEmbed = new EmbedBuilder()
-                        .setColor('#0099FF')
-                        .setTitle('🎬 فيديو محذوف')
-                        .addFields(
-                            { name: 'الاسم', value: video.name, inline: true },
-                            { name: 'النوع', value: video.type.name, inline: true },
-                            { name: 'الحجم', value: formatBytes(video.size), inline: true }
-                        )
-                        .setTimestamp();
-
-                    await logChannel.send({
-                        embeds: [videoEmbed],
-                        files: [{
-                            attachment: video.data,
-                            name: video.name
-                        }]
-                    });
-                }
-            }
-
-            if (documents.length > 0) {
-                const docEmbed = new EmbedBuilder()
-                    .setColor('#2ECC71')
-                    .setTitle('📄 مستندات محذوفة')
+            // إرسال الفيديوهات
+            for (const video of videos) {
+                const videoEmbed = new EmbedBuilder()
+                    .setColor('#0099FF')
+                    .setTitle('🎬 فيديو محذوف')
                     .addFields(
-                        documents.map(doc => ({
-                            name: `${doc.type.icon} ${doc.name}`,
-                            value: `**النوع:** ${doc.type.name}\n**الحجم:** ${formatBytes(doc.size)}`,
-                            inline: true
-                        }))
+                        { name: 'الاسم', value: video.name, inline: true },
+                        { name: 'النوع', value: video.type.name, inline: true },
+                        { name: 'الحجم', value: formatBytes(video.size), inline: true }
                     )
                     .setTimestamp();
 
                 await logChannel.send({
-                    embeds: [docEmbed],
-                    files: documents.map(d => ({
-                        attachment: d.data,
-                        name: d.name
-                    }))
+                    embeds: [videoEmbed],
+                    files: [{ attachment: video.data, name: video.name }]
                 });
+            }
+
+            // إرسال إمبدات المستندات والملفات العامة
+            if (documents.length > 0) {
+                const docEmbed = new EmbedBuilder()
+                    .setColor('#2ECC71')
+                    .setTitle('📄 مستندات محذوفة')
+                    .setDescription(`**عدد المستندات:** ${documents.length}`)
+                    .setTimestamp();
+
+                await logChannel.send({ embeds: [docEmbed] });
             }
 
             if (others.length > 0) {
                 const otherEmbed = new EmbedBuilder()
                     .setColor('#808080')
-                    .setTitle('📁 ملفات أخرى')
-                    .addFields(
-                        others.map(file => ({
-                            name: `${file.type.icon} ${file.type.name}`,
-                            value: `**الاسم:** ${file.name}\n**الحجم:** ${formatBytes(file.size)}`,
-                            inline: true
-                        }))
-                    )
+                    .setTitle('📁 ملفات عامة محذوفة')
+                    .setDescription(`**عدد الملفات:** ${others.length}`)
                     .setTimestamp();
 
+                await logChannel.send({ embeds: [otherEmbed] });
+            }
+
+            // إرسال جميع الملفات بعد الإمبدتات
+            const allFiles = [...documents, ...others];
+            for (const file of allFiles) {
                 await logChannel.send({
-                    embeds: [otherEmbed],
-                    files: others.map(f => ({
-                        attachment: f.data,
-                        name: f.name
-                    }))
+                    files: [{ attachment: file.data, name: file.name }]
                 });
             }
 
@@ -154,6 +125,7 @@ module.exports = (client) => {
     });
 };
 
+// دالة تحديد نوع الملف
 function getFileType(filename) {
     const ext = (filename.split('.').pop() || 'unknown').toLowerCase();
     const types = {
@@ -185,17 +157,12 @@ function getFileType(filename) {
     };
 
     for (const [key, type] of Object.entries(types)) {
-        if (type.exts.includes(ext)) {
-            return { ...type, ext };
-        }
+        if (type.exts.includes(ext)) return { ...type, ext };
     }
-    return { 
-        name: 'ملف عام', 
-        icon: '📁',
-        ext 
-    };
+    return { name: 'ملف عام', icon: '📁', ext };
 }
 
+// دالة تنسيق الحجم
 function formatBytes(bytes) {
     const units = ['بايت', 'كيلوبايت', 'ميجابايت', 'جيجابايت'];
     if (bytes === 0) return '0 بايت';
