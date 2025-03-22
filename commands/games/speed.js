@@ -1,6 +1,6 @@
 // commands/faster.js
 const { EmbedBuilder } = require('discord.js');
-const config = require('../../config.js');
+const config = require('./config.js');
 
 const imageQuestions = [
     {
