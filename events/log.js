@@ -16,7 +16,6 @@ module.exports = (client) => {
         if (!logChannel) return;
 
         try {
-            // جلب جميع المرفقات
             const attachments = [];
             for (const attachment of message.attachments.values()) {
                 try {
@@ -35,7 +34,6 @@ module.exports = (client) => {
 
             if (attachments.length === 0) return;
 
-            // تصنيف المرفقات
             const images = attachments.filter(a => a.type.name === 'صورة');
             const videos = attachments.filter(a => a.type.name === 'فيديو');
             const documents = attachments.filter(a => a.type.name === 'مستند');
@@ -43,7 +41,6 @@ module.exports = (client) => {
                 !['صورة', 'فيديو', 'مستند'].includes(a.type.name)
             );
 
-            // الإمبد الرئيسي
             const mainEmbed = new EmbedBuilder()
                 .setColor('#FF0000')
                 .setTitle('🗑️ تم حذف مرفقات')
@@ -51,7 +48,6 @@ module.exports = (client) => {
                 .setTimestamp()
                 .setFooter({ text: 'سجل الحذف', iconURL: message.author.displayAvatarURL() });
 
-            // إضافة أول صورة للإمبد الرئيسي
             if (images.length > 0) {
                 mainEmbed
                     .setImage(`attachment://${images[0].name}`)
@@ -61,7 +57,6 @@ module.exports = (client) => {
                     });
             }
 
-            // إرسال الإمبد الرئيسي مع المرفقات
             await logChannel.send({
                 embeds: [mainEmbed],
                 files: images.length > 0 ? [{
@@ -70,7 +65,6 @@ module.exports = (client) => {
                 }] : []
             });
 
-            // إرسال الصور الإضافية
             for (const img of images.slice(1)) {
                 const imgEmbed = new EmbedBuilder()
                     .setColor('#FFA500')
@@ -88,7 +82,6 @@ module.exports = (client) => {
                 });
             }
 
-            // إرسال الفيديوهات بعد الصور
             if (videos.length > 0) {
                 for (const video of videos) {
                     const videoEmbed = new EmbedBuilder()
@@ -111,7 +104,6 @@ module.exports = (client) => {
                 }
             }
 
-            // إرسال المستندات
             if (documents.length > 0) {
                 const docEmbed = new EmbedBuilder()
                     .setColor('#2ECC71')
@@ -134,7 +126,6 @@ module.exports = (client) => {
                 });
             }
 
-            // إرسال الملفات الأخرى
             if (others.length > 0) {
                 const otherEmbed = new EmbedBuilder()
                     .setColor('#808080')
@@ -163,7 +154,6 @@ module.exports = (client) => {
     });
 };
 
-// دالة تحديد نوع الملف
 function getFileType(filename) {
     const ext = (filename.split('.').pop() || 'unknown').toLowerCase();
     const types = {
@@ -206,10 +196,9 @@ function getFileType(filename) {
     };
 }
 
-// دالة تنسيق الحجم
 function formatBytes(bytes) {
     const units = ['بايت', 'كيلوبايت', 'ميجابايت', 'جيجابايت'];
     if (bytes === 0) return '0 بايت';
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return `${parseFloat((bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
+    return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
 }
