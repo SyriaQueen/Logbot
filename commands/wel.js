@@ -1,96 +1,68 @@
 const { AttachmentBuilder } = require('discord.js');
-const sharp = require('sharp');
+const { createCanvas, loadImage } = require('canvas');
 const fetch = require('node-fetch');
 
 module.exports = {
     name: 'صورة',
     async execute(message, args, client) {
         try {
-            // إعداداتك الخاصة
+            // الإعدادات الدقيقة حسب طلبك
             const settings = {
-                avatar: {
-                    width: 183, // 182.9789217053284
-                    height: 179, // 178.6167939136292
-                    left: 34, // 34.25
-                    top: 71 // 71.29
-                },
-                background: {
-                    width: 350,
-                    height: 350,
-                    color: '#ffffff00' // شفافية
-                }
+                width: 183,
+                height: 179,
+                left: 34.25,
+                top: 71.29,
+                bgColor: '#FFFFFF00' // خلفية شفافة
             };
 
-            // 1. الحصول على أفاتار المرسل
+            // 1. الحصول على أفاتار المستخدم
             const user = message.author;
-            const avatarURL = user.displayAvatarURL({ 
-                extension: 'png', 
-                size: 4096 
-            });
+            const avatarURL = user.displayAvatarURL({ format: 'png', size: 1024 });
 
-            // 2. تحميل الأفاتار
-            const response = await fetch(avatarURL);
-            const avatarBuffer = await response.buffer();
+            // 2. إنشاء Canvas
+            const canvas = createCanvas(settings.width, settings.height);
+            const ctx = canvas.getContext('2d');
 
-            // 3. معالجة الأفاتار
-            const processedAvatar = await sharp(avatarBuffer)
-                .resize(settings.avatar.width, settings.avatar.height, {
-                    fit: 'cover',
-                    position: 'centre'
-                })
-                .toBuffer();
+            // 3. تحميل الصورة
+            const image = await loadImage(await (await fetch(avatarURL)).buffer());
+            
+            // 4. رسم الخلفية
+            ctx.fillStyle = settings.bgColor;
+            ctx.fillRect(0, 0, settings.width, settings.height);
 
-            // 4. إنشاء خلفية مخصصة
-            const background = await sharp({
-                create: {
-                    width: settings.background.width,
-                    height: settings.background.height,
-                    channels: 4,
-                    background: sharp.color(settings.background.color)
-                }
-            }).png().toBuffer();
+            // 5. قص الصورة بشكل دائري
+            ctx.beginPath();
+            ctx.arc(
+                settings.width/2, 
+                settings.height/2, 
+                Math.min(settings.width, settings.height)/2, 
+                0, 
+                Math.PI * 2
+            );
+            ctx.closePath();
+            ctx.clip();
 
-            // 5. دمج الأفاتار مع الخلفية
-            const compositeImage = await sharp(background)
-                .composite([{
-                    input: processedAvatar,
-                    left: settings.avatar.left,
-                    top: settings.avatar.top
-                }])
-                .png()
-                .toBuffer();
+            // 6. رسم الصورة حسب الإحداثيات
+            ctx.drawImage(
+                image,
+                settings.left,
+                settings.top,
+                settings.width,
+                settings.height
+            );
 
-            // 6. تطبيق القص الدائري
-            const circularImage = await sharp(compositeImage)
-                .composite([{
-                    input: Buffer.from(
-                        `<svg width="${settings.avatar.width}" height="${settings.avatar.height}">
-                            <circle cx="${settings.avatar.width/2}" 
-                                    cy="${settings.avatar.height/2}" 
-                                    r="${Math.min(settings.avatar.width, settings.avatar.height)/2}" 
-                                    fill="black"/>
-                        </svg>`
-                    ),
-                    blend: 'dest-in',
-                    left: settings.avatar.left,
-                    top: settings.avatar.top
-                }])
-                .png()
-                .toBuffer();
+            // 7. تحويل إلى Buffer وإرسال
+            const buffer = canvas.toBuffer('image/png');
+            const attachment = new AttachmentBuilder(buffer, { name: 'avatar.png' });
 
-            // 7. إرسال النتيجة
-            const attachment = new AttachmentBuilder(circularImage, {
-                name: 'custom_avatar.png'
-            });
-
-            await message.reply({
-                content: '🖼️ صورتك المخصصة:',
-                files: [attachment]
+            await message.reply({ 
+                content: '🎇 صورتك الجاهزة:', 
+                files: [attachment] 
             });
 
         } catch (error) {
-            console.error('حدث خطأ تقني:', error);
-            message.reply('❌ فشل في توليد الصورة، يرجى المحاولة لاحقاً');
+            console.error('حدث خطأ:', error);
+            message.reply('❌ فشل في المعالجة - تأكد من وجود صورة في البروفايل');
         }
     }
 };
