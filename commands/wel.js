@@ -1,50 +1,60 @@
-const { createCanvas, loadImage } = require('canvas');
 const { AttachmentBuilder } = require('discord.js');
+const sharp = require('sharp');
+const fs = require('fs');
 
 module.exports = {
-    name: 'افتار',
-    description: 'يرسل الأفتار الخاص بك داخل خلفية مخصصة',
-    async execute(message, args) {
+    name: 'صورة',
+    async execute(message, args, client) {
+        // التحقق من وجود صورة مرفقة
+        if (!message.attachments.size) {
+            return message.reply('يرجى إرفاق الصورة المراد معالجتها.');
+        }
+
         try {
-            const user = message.mentions.users.first() || message.author; // تحديد المستخدم
-            const avatarURL = user.displayAvatarURL({ format: 'png', size: 512 });
+            // تحميل الصورة المرفقة
+            const imageUrl = message.attachments.first().url;
+            const response = await fetch(imageUrl);
+            const imageBuffer = await response.buffer();
 
-            // تحميل الخلفية والصورة الشخصية
-            const background = await loadImage('https://i.postimg.cc/85qJ0TyD/background.png'); // استبدلي بالمسار الصحيح للخلفية
-            const avatar = await loadImage(avatarURL);
+            // معالجة الصورة
+            const processedImage = await sharp(imageBuffer)
+                .resize(182, 178) // تغيير الحجم حسب القياسات
+                .composite([{
+                    input: await sharp({
+                        create: {
+                            width: 182,
+                            height: 178,
+                            channels: 4,
+                            background: { r: 0, g: 0, b: 0, alpha: 0 }
+                        }
+                    })
+                    .composite([{
+                        input: imageBuffer,
+                        blend: 'over',
+                        left: 34,
+                        top: 71
+                    }])
+                    .png()
+                    .toBuffer(),
+                    blend: 'over'
+                }])
+                .extend({
+                    top: 0,
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    background: { r: 0, g: 0, b: 0, alpha: 0 }
+                })
+                .toBuffer();
 
-            // إنشاء الكانفس بنفس أبعاد الخلفية
-            const canvas = createCanvas(background.width, background.height);
-            const ctx = canvas.getContext('2d');
-
-            // رسم الخلفية
-            ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
-
-            // حساب موضع الأفاتار بناءً على الإحداثيات التي ذكرتِها
-            const avatarX = 34.25; // الإحداثي الأفقي
-            const avatarY = 71.29; // الإحداثي الرأسي
-            const avatarWidth = 182.9789217053284; // العرض
-            const avatarHeight = 178.6167939136292; // الارتفاع
-
-            // رسم الأفاتار على الخلفية
-            ctx.beginPath();
-            ctx.arc(
-                avatarX + avatarWidth / 2, 
-                avatarY + avatarHeight / 2, 
-                avatarWidth / 2, 
-                0, Math.PI * 2
-            );
-            ctx.closePath();
-            ctx.clip();
-            ctx.drawImage(avatar, avatarX, avatarY, avatarWidth, avatarHeight);
-
-            // تحويل الصورة إلى ملف يمكن إرساله
-            const attachment = new AttachmentBuilder(canvas.toBuffer(), { name: 'avatar.png' });
-
-            await message.channel.send({ files: [attachment] });
+            // حفظ وإرسال الصورة
+            fs.writeFileSync('processed_image.png', processedImage);
+            const attachment = new AttachmentBuilder('processed_image.png');
+            
+            message.reply({ files: [attachment] });
         } catch (error) {
-            console.error('حدث خطأ أثناء إنشاء الأفتار:', error);
-            message.reply('حدث خطأ أثناء إنشاء الصورة.');
+            console.error(error);
+            message.reply('حدث خطأ أثناء معالجة الصورة.');
         }
     }
 };
