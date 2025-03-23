@@ -5,73 +5,92 @@ const fetch = require('node-fetch');
 module.exports = {
     name: 'صورة',
     async execute(message, args, client) {
-        if (!message.attachments.size) {
-            return message.reply('❌ يرجى إرفاق الصورة المراد معالجتها.');
-        }
-
         try {
-            // المعلمات الأساسية (يجب تعديلها حسب الحاجة)
-            const baseWidth = 350; // عرض الخلفية الكلي
-            const baseHeight = 350; // ارتفاع الخلفية الكلي
-            const profileWidth = 183; // عرض صورتك
-            const profileHeight = 179; // ارتفاع صورتك
-            const leftPosition = 34; // الإحداثي الأيسر
-            const topPosition = 71; // الإحداثي العلوي
+            // إعداداتك الخاصة
+            const settings = {
+                avatar: {
+                    width: 183, // 182.9789217053284
+                    height: 179, // 178.6167939136292
+                    left: 34, // 34.25
+                    top: 71 // 71.29
+                },
+                background: {
+                    width: 350,
+                    height: 350,
+                    color: '#ffffff00' // شفافية
+                }
+            };
 
-            // تحميل الصورة المرفقة
-            const imageUrl = message.attachments.first().url;
-            const response = await fetch(imageUrl);
-            const imageBuffer = await response.buffer();
+            // 1. الحصول على أفاتار المرسل
+            const user = message.author;
+            const avatarURL = user.displayAvatarURL({ 
+                extension: 'png', 
+                size: 4096 
+            });
 
-            // 1. إنشاء خلفية شفافية بحجم كافي
-            const baseImage = await sharp({
+            // 2. تحميل الأفاتار
+            const response = await fetch(avatarURL);
+            const avatarBuffer = await response.buffer();
+
+            // 3. معالجة الأفاتار
+            const processedAvatar = await sharp(avatarBuffer)
+                .resize(settings.avatar.width, settings.avatar.height, {
+                    fit: 'cover',
+                    position: 'centre'
+                })
+                .toBuffer();
+
+            // 4. إنشاء خلفية مخصصة
+            const background = await sharp({
                 create: {
-                    width: baseWidth,
-                    height: baseHeight,
+                    width: settings.background.width,
+                    height: settings.background.height,
                     channels: 4,
-                    background: { r: 0, g: 0, b: 0, alpha: 0 }
+                    background: sharp.color(settings.background.color)
                 }
             }).png().toBuffer();
 
-            // 2. معالجة الصورة الشخصية
-            const processedProfile = await sharp(imageBuffer)
-                .resize(profileWidth, profileHeight, { fit: 'cover' })
-                .toBuffer();
-
-            // 3. دمج الصورة على الخلفية
-            const compositeImage = await sharp(baseImage)
+            // 5. دمج الأفاتار مع الخلفية
+            const compositeImage = await sharp(background)
                 .composite([{
-                    input: processedProfile,
-                    left: leftPosition,
-                    top: topPosition
+                    input: processedAvatar,
+                    left: settings.avatar.left,
+                    top: settings.avatar.top
                 }])
                 .png()
                 .toBuffer();
 
-            // 4. تطبيق شكل دائري
+            // 6. تطبيق القص الدائري
             const circularImage = await sharp(compositeImage)
                 .composite([{
                     input: Buffer.from(
-                        `<svg width="${baseWidth}" height="${baseHeight}">
-                            <circle cx="${baseWidth/2}" cy="${baseHeight/2}" 
-                                    r="${Math.min(baseWidth, baseHeight)/2}" 
+                        `<svg width="${settings.avatar.width}" height="${settings.avatar.height}">
+                            <circle cx="${settings.avatar.width/2}" 
+                                    cy="${settings.avatar.height/2}" 
+                                    r="${Math.min(settings.avatar.width, settings.avatar.height)/2}" 
                                     fill="black"/>
                         </svg>`
                     ),
-                    blend: 'dest-in'
+                    blend: 'dest-in',
+                    left: settings.avatar.left,
+                    top: settings.avatar.top
                 }])
                 .png()
                 .toBuffer();
 
+            // 7. إرسال النتيجة
             const attachment = new AttachmentBuilder(circularImage, {
-                name: 'profile_result.png'
+                name: 'custom_avatar.png'
             });
 
-            await message.reply({ files: [attachment] });
+            await message.reply({
+                content: '🖼️ صورتك المخصصة:',
+                files: [attachment]
+            });
 
         } catch (error) {
             console.error('حدث خطأ تقني:', error);
-            message.reply('❌ فشل في المعالجة - تأكد من إرفاق صورة صالحة');
+            message.reply('❌ فشل في توليد الصورة، يرجى المحاولة لاحقاً');
         }
     }
 };
