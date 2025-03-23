@@ -1,29 +1,32 @@
 const { AttachmentBuilder } = require('discord.js');
 const sharp = require('sharp');
-const fs = require('fs');
+const fetch = require('node-fetch');
 
 module.exports = {
     name: 'صورة',
     async execute(message, args, client) {
-        // التحقق من وجود صورة مرفقة
         if (!message.attachments.size) {
-            return message.reply('يرجى إرفاق الصورة المراد معالجتها.');
+            return message.reply('❌ يرجى إرفاق الصورة المراد معالجتها.');
         }
 
         try {
-            // تحميل الصورة المرفقة
+            // تحميل الصورة
             const imageUrl = message.attachments.first().url;
             const response = await fetch(imageUrl);
-            const imageBuffer = await response.buffer();
+            const imageBuffer = await response.buffer(); // <-- التعديل هنا
 
-            // معالجة الصورة
+            // معالجة الصورة مع الإحداثيات
             const processedImage = await sharp(imageBuffer)
-                .resize(182, 178) // تغيير الحجم حسب القياسات
+                .resize(
+                    Math.round(182.9789217053284), 
+                    Math.round(178.6167939136292), 
+                    { fit: 'cover' }
+                )
                 .composite([{
                     input: await sharp({
                         create: {
-                            width: 182,
-                            height: 178,
+                            width: Math.round(182.9789217053284),
+                            height: Math.round(178.6167939136292),
                             channels: 4,
                             background: { r: 0, g: 0, b: 0, alpha: 0 }
                         }
@@ -31,30 +34,43 @@ module.exports = {
                     .composite([{
                         input: imageBuffer,
                         blend: 'over',
-                        left: 34,
-                        top: 71
+                        left: Math.round(34.25),
+                        top: Math.round(71.29)
                     }])
                     .png()
                     .toBuffer(),
                     blend: 'over'
                 }])
                 .extend({
-                    top: 0,
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    background: { r: 0, g: 0, b: 0, alpha: 0 }
+                    background: { r: 255, g: 255, b: 255, alpha: 1 } // خلفية بيضاء
                 })
                 .toBuffer();
 
-            // حفظ وإرسال الصورة
-            fs.writeFileSync('processed_image.png', processedImage);
-            const attachment = new AttachmentBuilder('processed_image.png');
-            
-            message.reply({ files: [attachment] });
+            // إنشاء شكل دائري
+            const circularImage = await sharp(processedImage)
+                .composite([{
+                    input: Buffer.from(
+                        `<svg width="${Math.round(182.9789217053284)}" height="${Math.round(178.6167939136292)}">
+                            <circle cx="${Math.round(182.9789217053284/2)}" 
+                                    cy="${Math.round(178.6167939136292/2)}" 
+                                    r="${Math.round(178.6167939136292/2)}" 
+                                    fill="black"/>
+                        </svg>`
+                    ),
+                    blend: 'dest-in'
+                }])
+                .png()
+                .toBuffer();
+
+            const attachment = new AttachmentBuilder(circularImage, { 
+                name: 'profile_circle.png' 
+            });
+
+            await message.reply({ files: [attachment] });
+
         } catch (error) {
-            console.error(error);
-            message.reply('حدث خطأ أثناء معالجة الصورة.');
+            console.error('حدث خطأ:', error);
+            message.reply('❌ فشل في معالجة الصورة - تأكد من إرفاق صورة صالحة');
         }
     }
 };
