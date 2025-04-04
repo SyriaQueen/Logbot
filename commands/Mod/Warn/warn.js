@@ -5,7 +5,7 @@ module.exports = {
   name: 'warn',
   description: 'تحذير عضو',
   async execute(message, args, client) {
-    const allowedRole = 'ROLE_ID_HERE'; // استبدليه بـ ID الرتبة المسموحة
+    const allowedRole = '1324351095291641857'; // استبدليه بـ ID الرتبة المسموحة
     if (!message.member.roles.cache.has(allowedRole) && !message.member.permissions.has('Administrator')) {
       return message.reply('ما عندك صلاحية للتحذير.');
     }
@@ -25,8 +25,17 @@ module.exports = {
 
     client.warningsCache.push(newWarning);
 
+    // إرسال التحذير في قناة العامة
     await message.reply(`${user} تم تحذيره بنجاح.`);
 
+    // التحقق إذا كان الخاص مفتوحًا
+    try {
+      await user.send(`تم تحذيرك في السيرفر **${message.guild.name}** بسبب: **${reason}**. يرجى الامتثال لقوانين السيرفر.`);
+    } catch (err) {
+      console.log('الخاص مغلق أو لا يمكن إرسال الرسالة.');
+    }
+
+    // إرسال سجل التحذير إلى قناة السجل
     const logChannel = message.guild.channels.cache.get(config.logWId);
     if (logChannel) {
       const embed = new EmbedBuilder()
@@ -44,4 +53,4 @@ module.exports = {
       await logChannel.send({ embeds: [embed] });
     }
   }
-};
+}
