@@ -1,49 +1,55 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 
 module.exports = {
-  name: 'warnings',
-  description: 'عرض تحذيرات العضو',
-  async execute(message, args, client) {
-    const user = message.mentions.users.first();
-    if (!user) return message.reply('رجاءً حددي عضوًا لعرض تحذيراته.');
+    name: 'warn',
+    execute: async (message, args, client) => {
+        if (!message.member.permissions.has('ManageMessages')) {
+            return message.reply('❌ ليس لديك الصلاحية لاستخدام هذا الأمر.');
+        }
 
-    const warnings = client.warningsCache.filter(w => w.userId === user.id);
-    if (warnings.length === 0) return message.reply('ما في أي تحذيرات لهذا العضو.');
+        const target = message.mentions.users.first();
+        if (!target) return message.reply('❌ يرجى تحديد عضو لتحذيره.');
+        
+        const reason = args.slice(1).join(' ') || 'لا يوجد سبب';
 
-    let page = 0;
-    const maxPerPage = 1;
-    const totalPages = Math.ceil(warnings.length / maxPerPage);
+        // إنشاء كائن التحذير
+        const warning = {
+            id: Date.now(),
+            reason,
+            date: new Date(),
+            warnerId: message.author.id,
+        };
 
-    const generateEmbed = (index) => {
-      const warning = warnings[index];
-      return new EmbedBuilder()
-        .setColor(0xFFA500)
-        .setTitle(`تحذير رقم ${index + 1} من ${warnings.length}`)
-        .addFields(
-          { name: 'العضو', value: `<@${warning.userId}>`, inline: true },
-          { name: 'المشرف', value: `<@${warning.moderatorId}>`, inline: true },
-          { name: 'السبب', value: warning.reason },
-          { name: 'التاريخ', value: `<t:${Math.floor(new Date(warning.date).getTime() / 1000)}:f>` }
-        );
-    };
+        // إضافة التحذير للذاكرة
+        if (!client.warnings) client.warnings = new Map();
+        if (!client.warnings.has(target.id)) client.warnings.set(target.id, []);
+        client.warnings.get(target.id).push(warning);
 
-    const row = new ActionRowBuilder()
-      .addComponents(
-        new ButtonBuilder().setCustomId('prev').setLabel('السابق').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('next').setLabel('التالي').setStyle(ButtonStyle.Primary),
-      );
+        // إرسال رسالة خاصة للعضو
+        try {
+            await target.send(`⚠️ لقد تم تحذيرك في سيرفر ${message.guild.name}\nالسبب: ${reason}`);
+        } catch (err) {
+            console.log('تعذر إرسال رسالة خاصة للعضو.');
+        }
 
-    const msg = await message.reply({ embeds: [generateEmbed(page)], components: [row] });
+        // إرسال تأكيد التحذير
+        message.reply(`✅ تم تحذير ${target.tag} بنجاح.`);
 
-    const collector = msg.createMessageComponentCollector({ time: 60_000 });
-
-    collector.on('collect', async interaction => {
-      if (interaction.user.id !== message.author.id) return interaction.reply({ content: 'هالأزرار مو إلك.', ephemeral: true });
-
-      if (interaction.customId === 'prev' && page > 0) page--;
-      else if (interaction.customId === 'next' && page < totalPages - 1) page++;
-
-      await interaction.update({ embeds: [generateEmbed(page)] });
-    });
-  }
+        // تسجيل التحذير في قناة السجل
+        const logChannel = client.channels.cache.get(client.config.logWID);
+        if (logChannel) {
+            const logEmbed = new EmbedBuilder()
+                .setColor(0xFFA500)
+                .setTitle('تحذير جديد')
+                .addFields(
+                    { name: 'العضو', value: `${target.tag} (${target.id})` },
+                    { name: 'السبب', value: reason },
+                    { name: 'بواسطة', value: message.author.tag },
+                    { name: 'رقم التحذير', value: warning.id.toString() }
+                )
+                .setTimestamp();
+            
+            logChannel.send({ embeds: [logEmbed] });
+        }
+    }
 };
