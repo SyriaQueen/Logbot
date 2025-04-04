@@ -1,25 +1,44 @@
+const { EmbedBuilder } = require('discord.js');
+
 module.exports = {
-  name: 'removewarn',
-  description: 'حذف تحذير برقم معيّن',
-  async execute(message, args, client) {
-    const allowedRole = '1324351095291641857'; // استبدليه بـ ID الرتبة المسموحة
-    if (!message.member.roles.cache.has(allowedRole) && !message.member.permissions.has('Administrator')) {
-      return message.reply('ما عندك صلاحية لحذف التحذيرات.');
+    name: 'removewarn',
+    execute: async (message, args, client) => {
+        if (!message.member.permissions.has('ManageMessages')) {
+            return message.reply('❌ ليس لديك الصلاحية لاستخدام هذا الأمر.');
+        }
+
+        const target = message.mentions.users.first();
+        if (!target) return message.reply('❌ يرجى تحديد عضو.');
+        
+        const warnId = args[1];
+        if (!warnId) return message.reply('❌ يرجى تحديد رقم التحذير.');
+
+        // البحث عن التحذير وحذفه
+        const userWarnings = client.warnings?.get(target.id) || [];
+        const initialLength = userWarnings.length;
+        client.warnings.set(target.id, userWarnings.filter(w => w.id.toString() !== warnId));
+
+        if (initialLength === client.warnings.get(target.id).length) {
+            return message.reply('❌ لم يتم العثور على التحذير المحدد.');
+        }
+
+        // إرسال التأكيد
+        message.reply(`✅ تم حذف التحذير #${warnId} بنجاح.`);
+
+        // تسجيل العملية في السجل
+        const logChannel = client.channels.cache.get(client.config.logWID);
+        if (logChannel) {
+            const logEmbed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle('حذف تحذير')
+                .addFields(
+                    { name: 'العضو', value: `${target.tag} (${target.id})` },
+                    { name: 'رقم التحذير', value: warnId },
+                    { name: 'بواسطة', value: message.author.tag }
+                )
+                .setTimestamp();
+            
+            logChannel.send({ embeds: [logEmbed] });
+        }
     }
-
-    const warnId = parseInt(args[0]);
-    if (isNaN(warnId)) return message.reply('رجاءً اكتبي رقم التحذير اللي تبغي تحذفيه.');
-
-    const index = client.warningsCache.findIndex(w => w.id === warnId);
-    if (index === -1) return message.reply('ما في تحذير بهذا الرقم.');
-
-    const removed = client.warningsCache.splice(index, 1)[0];
-
-    await message.reply(`تم حذف التحذير رقم ${warnId} لـ <@${removed.userId}>.`);
-
-    const logChannel = message.guild.channels.cache.get(config.logWId);
-    if (logChannel) {
-      await logChannel.send(`تم حذف التحذير رقم ${warnId} لـ <@${removed.userId}> من قبل <@${message.author.id}>.`);
-    }
-  }
 };
