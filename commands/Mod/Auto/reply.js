@@ -2,6 +2,7 @@ const {
     EmbedBuilder, 
     ActionRowBuilder, 
     ButtonBuilder, 
+    ButtonStyle,
     ModalBuilder, 
     TextInputBuilder, 
     TextInputStyle, 
@@ -21,7 +22,7 @@ module.exports = {
         const mainEmbed = new EmbedBuilder()
             .setColor(0x0099FF)
             .setTitle('⚙️ نظام الردود التلقائية')
-            .setDescription('اختر الإجراء المطلوب من الأزرار أدناه:');
+            .setDescription('اختر الإجراء المطلوب:');
 
         const buttons = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
@@ -63,7 +64,7 @@ module.exports = {
 
                     return new EmbedBuilder()
                         .setColor(0x2F3136)
-                        .setTitle(`📂 الردود (الصفحة ${currentPage + 1}/${totalPages})`)
+                        .setTitle(`📜 الردود (${currentPage + 1}/${totalPages})`)
                         .setDescription(
                             replies.map(([id, data], index) => 
                                 `**${currentPage * perPage + index + 1}.** \`${data.triggers.join(', ')}\`\n↳ ${data.response}`
@@ -73,17 +74,17 @@ module.exports = {
 
                 const navButtons = new ActionRowBuilder().addComponents(
                     new ButtonBuilder()
-                        .setCustomId('prev_page')
+                        .setCustomId('prev')
                         .setLabel('السابق')
                         .setStyle(ButtonStyle.Secondary)
                         .setDisabled(currentPage === 0),
                     new ButtonBuilder()
-                        .setCustomId('next_page')
+                        .setCustomId('next')
                         .setLabel('التالي')
                         .setStyle(ButtonStyle.Secondary)
                         .setDisabled(currentPage >= totalPages - 1),
                     new ButtonBuilder()
-                        .setCustomId('delete_reply')
+                        .setCustomId('delete')
                         .setLabel('حذف')
                         .setStyle(ButtonStyle.Danger)
                         .setEmoji('🗑️')
@@ -97,12 +98,12 @@ module.exports = {
                 const pageCollector = msg.createMessageComponentCollector({ time: 60000 });
                 
                 pageCollector.on('collect', async pi => {
-                    if (pi.customId === 'prev_page') currentPage--;
-                    if (pi.customId === 'next_page') currentPage++;
+                    if (pi.customId === 'prev') currentPage--;
+                    if (pi.customId === 'next') currentPage++;
                     
-                    if (pi.customId === 'delete_reply') {
+                    if (pi.customId === 'delete') {
                         const selectMenu = new StringSelectMenuBuilder()
-                            .setCustomId('select_reply_to_delete')
+                            .setCustomId('delete_reply')
                             .setPlaceholder('اختر ردًا للحذف')
                             .addOptions(
                                 Array.from(guildReplies.entries())
@@ -114,22 +115,22 @@ module.exports = {
                             );
 
                         await pi.update({
-                            content: 'اختر الرد الذي تريد حذفه:',
+                            content: 'اختر الرد المراد حذفه:',
                             components: [new ActionRowBuilder().addComponents(selectMenu)],
                             embeds: []
                         });
+                    } else {
+                        navButtons.components[0].setDisabled(currentPage === 0);
+                        navButtons.components[1].setDisabled(currentPage >= totalPages - 1);
+                        await pi.update({ embeds: [generateEmbed()], components: [navButtons] });
                     }
-
-                    navButtons.components[0].setDisabled(currentPage === 0);
-                    navButtons.components[1].setDisabled(currentPage >= totalPages - 1);
-                    await pi.update({ embeds: [generateEmbed()], components: [navButtons] });
                 });
 
             // قسم الإضافة
             } else if (i.customId === 'add_reply') {
                 const modal = new ModalBuilder()
                     .setCustomId('add_reply_modal')
-                    .setTitle('إنشاء رد تلقائي');
+                    .setTitle('إضافة رد تلقائي');
 
                 const triggersInput = new TextInputBuilder()
                     .setCustomId('triggers_input')
@@ -187,7 +188,7 @@ module.exports = {
     async handleInteractions(interaction, client) {
         if (!interaction.isStringSelectMenu()) return;
         
-        if (interaction.customId === 'select_reply_to_delete') {
+        if (interaction.customId === 'delete_reply') {
             const replyId = interaction.values[0];
             const guildReplies = client.autoReplies.get(interaction.guild.id);
             
