@@ -1,49 +1,50 @@
-const { EmbedBuilder } = require('discord.js');
-const config = require('../../../config.js'); // استيراد الكونفيج
+const { EmbedBuilder, PermissionsBitField } = require('discord.js');
+const config = require('../../../config.js');
 
 module.exports = {
     name: 'removewarn',
-    execute: async (message, args, client) => {
-        // التحقق من الصلاحيات
-        if (!message.member.permissions.has('ManageMessages')) {
-            return message.reply('⛔ ليس لديك الصلاحيات اللازمة!');
+    async execute(message, args, client) {
+        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+            return message.reply('❌ صلاحية مطلوبة: إدارة الخادم');
         }
 
         const target = message.mentions.users.first();
-        if (!target) return message.reply('❌ يرجى تحديد عضو!');
-        
-        const warnId = args[1];
-        if (!warnId) return message.reply('❌ يرجى تحديد رقم التحذير!');
+        const warnId = Number(args[1]);
 
-        // البحث عن التحذير
-        if (!client.warnings) client.warnings = new Map();
-        const userWarnings = client.warnings.get(target.id) || [];
-        
-        const initialLength = userWarnings.length;
-        const newWarnings = userWarnings.filter(w => w.id.toString() !== warnId);
-        
-        if (newWarnings.length === initialLength) {
-            return message.reply('❌ لم يتم العثور على التحذير المحدد!');
+        if (!target || !warnId) {
+            return message.reply('❌ استخدام: !removewarn @العضو [رقم التحذير]');
         }
 
-        // تحديث التحذيرات
-        client.warnings.set(target.id, newWarnings);
-        message.reply(`✅ تم إزالة التحذير #${warnId} بنجاح!`);
+        const guildWarns = client.warnings.get(message.guild.id);
+        if (!guildWarns?.users?.has(target.id)) {
+            return message.reply('❌ لا يوجد تحذيرات لهذا العضو');
+        }
 
-        // تسجيل الإزالة في السجل
+        const warns = guildWarns.users.get(target.id);
+        const index = warns.findIndex(w => w.id === warnId);
+
+        if (index === -1) {
+            return message.reply('❌ رقم التحذير غير صحيح');
+        }
+
+        warns.splice(index, 1);
+
+        // تسجيل الإزالة
         const logChannel = client.channels.cache.get(config.logWID);
         if (logChannel) {
-            const embed = new EmbedBuilder()
-                .setColor(0x00FF00)
-                .setTitle('إزالة تحذير')
-                .addFields(
-                    { name: 'العضو', value: target.toString(), inline: true },
-                    { name: 'رقم التحذير', value: warnId, inline: true },
-                    { name: 'المشرف', value: message.author.tag, inline: true }
-                )
-                .setTimestamp();
-            
-            logChannel.send({ embeds: [embed] });
+            logChannel.send({
+                embeds: [new EmbedBuilder()
+                    .setColor(0xFF0000)
+                    .setTitle('إزالة تحذير')
+                    .addFields(
+                        { name: 'العضو', value: target.toString() },
+                        { name: 'التحذير المزال', value: `#${warnId}` },
+                        { name: 'المشرف', value: message.author.toString() }
+                    )
+                ]
+            });
         }
+
+        message.reply(`✅ تم إزالة التحذير #${warnId} من ${target}`);
     }
 };
