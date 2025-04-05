@@ -114,4 +114,4 @@ app.listen(10000, () => console.log('🌐 الخادم يعمل على المن�
 // نظام الإبقاء على التشغيل
 setInterval(() => console.log("🟢 البوت يعمل..."), 5 * 60 * 1000);
 
-client.login(config.TOKEN);
+client.login(config.TOKE);
