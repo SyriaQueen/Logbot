@@ -1,55 +1,62 @@
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, ButtonBuilder, ActionRowBuilder } = require('discord.js');
+const config = require('../../../config.js');
 
 module.exports = {
-    name: 'warn',
-    execute: async (message, args, client) => {
-        if (!message.member.permissions.has('ManageMessages')) {
-            return message.reply('❌ ليس لديك الصلاحية لاستخدام هذا الأمر.');
+    name: 'warnings',
+    async execute(message, args, client) {
+        const target = message.mentions.users.first() || message.author;
+        const guildWarns = client.warnings.get(message.guild.id)?.users?.get(target.id);
+
+        if (!guildWarns?.length) {
+            return message.reply('❌ لا يوجد تحذيرات');
         }
 
-        const target = message.mentions.users.first();
-        if (!target) return message.reply('❌ يرجى تحديد عضو لتحذيره.');
-        
-        const reason = args.slice(1).join(' ') || 'لا يوجد سبب';
+        let page = 0;
+        const maxPage = Math.ceil(guildWarns.length / 5);
 
-        // إنشاء كائن التحذير
-        const warning = {
-            id: Date.now(),
-            reason,
-            date: new Date(),
-            warnerId: message.author.id,
+        const updateEmbed = () => {
+            return new EmbedBuilder()
+                .setColor(0x0099FF)
+                .setTitle(`سجل التحذيرات - ${target.tag}`)
+                .setDescription(guildWarns
+                    .slice(page * 5, (page + 1) * 5)
+                    .map(w => `**#${w.id}** <t:${Math.floor(w.date/1000)}>\n${w.reason}`)
+                    .join('\n\n'))
+                .setFooter({ text: `الصفحة ${page + 1}/${maxPage}` });
         };
 
-        // إضافة التحذير للذاكرة
-        if (!client.warnings) client.warnings = new Map();
-        if (!client.warnings.has(target.id)) client.warnings.set(target.id, []);
-        client.warnings.get(target.id).push(warning);
+        const buttons = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('prev')
+                .setLabel('السابق')
+                .setStyle(2)
+                .setDisabled(page === 0),
+            new ButtonBuilder()
+                .setCustomId('next')
+                .setLabel('التالي')
+                .setStyle(2)
+                .setDisabled(page >= maxPage - 1)
+        );
 
-        // إرسال رسالة خاصة للعضو
-        try {
-            await target.send(`⚠️ لقد تم تحذيرك في سيرفر ${message.guild.name}\nالسبب: ${reason}`);
-        } catch (err) {
-            console.log('تعذر إرسال رسالة خاصة للعضو.');
-        }
+        const msg = await message.reply({ 
+            embeds: [updateEmbed()], 
+            components: [buttons] 
+        });
 
-        // إرسال تأكيد التحذير
-        message.reply(`✅ تم تحذير ${target.tag} بنجاح.`);
+        const filter = i => i.user.id === message.author.id;
+        const collector = msg.createMessageComponentCollector({ filter, time: 60000 });
 
-        // تسجيل التحذير في قناة السجل
-        const logChannel = client.channels.cache.get(client.config.logWID);
-        if (logChannel) {
-            const logEmbed = new EmbedBuilder()
-                .setColor(0xFFA500)
-                .setTitle('تحذير جديد')
-                .addFields(
-                    { name: 'العضو', value: `${target.tag} (${target.id})` },
-                    { name: 'السبب', value: reason },
-                    { name: 'بواسطة', value: message.author.tag },
-                    { name: 'رقم التحذير', value: warning.id.toString() }
-                )
-                .setTimestamp();
-            
-            logChannel.send({ embeds: [logEmbed] });
-        }
+        collector.on('collect', async i => {
+            if (i.customId === 'prev') page--;
+            if (i.customId === 'next') page++;
+
+            buttons.components[0].setDisabled(page === 0);
+            buttons.components[1].setDisabled(page >= maxPage - 1);
+
+            await i.update({
+                embeds: [updateEmbed()],
+                components: [buttons]
+            });
+        });
     }
 };
