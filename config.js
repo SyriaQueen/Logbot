@@ -6,5 +6,5 @@ module.exports = {
     TICKET_CATEGORY_ID: '1350897162665590845',
     suggestionChannelId: '1352035974494027846',
     suggestionLogChannelId: '1323380778972876893',
-    logWID: '1357830988083892294'
+     logWID: '1357830988083892294'
 };
