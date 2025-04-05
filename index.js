@@ -105,13 +105,13 @@ for (const file of eventFiles) {
     event(client);
 }
 
-// خادم ويب (بدون تغيير)
+// خادم ويب
 const express = require('express');
 const app = express();
 app.get('/', (req, res) => res.send('البوت يعمل!'));
 app.listen(10000, () => console.log('🌐 الخادم يعمل على المنفذ 10000'));
 
-// نظام الإبقاء على التشغيل (بدون تغيير)
+// نظام الإبقاء على التشغيل
 setInterval(() => console.log("🟢 البوت يعمل..."), 5 * 60 * 1000);
 
 client.login(config.TOKEN);
