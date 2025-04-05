@@ -8,16 +8,16 @@ const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers // إضافة إذا كنت تستخدم صلاحيات الأعضاء
+        GatewayIntentBits.GuildMembers
     ]
 });
 
 // أنظمة التخزين
 client.commands = new Map();
 client.warnings = new Map();
-client.autoReplies = new Map(); // <-- أهم إضافة
+client.autoReplies = new Map();
 
-// دالة قراءة الملفات بشكل عاودي
+// دالة قراءة الأوامن العاودية
 function readCommands(dir) {
     const files = fs.readdirSync(dir, { withFileTypes: true });
     let commandFiles = [];
@@ -44,23 +44,24 @@ for (const filePath of commandFiles) {
     }
 }
 
-// الأحداث
+// الأحداث الأساسية
 client.once('ready', () => {
     console.log(`✅ ${client.user.tag} جاهز للعمل!`);
 });
 
-// نظام الرد التلقائي
+// نظام الرد التلقائي المطور
 client.on('messageCreate', async (message) => {
-    if (message.author.bot || !message.guild) return;
+    if (message.author.bot) return;
 
-    // الجزء الجديد: الردود التلقائية
-    const guildReplies = client.autoReplies.get(message.guild.id);
-    if (guildReplies) {
+    // الجزء الجديد: نظام الردود المتقدم
+    if (client.autoReplies.has(message.guild.id)) {
         const content = message.content.toLowerCase();
-        for (const [trigger, response] of guildReplies) {
-            if (content.includes(trigger)) {
-                await message.reply(response);
-                return; // توقف بعد أول تطابق
+        const guildReplies = client.autoReplies.get(message.guild.id);
+        
+        for (const [id, replyData] of guildReplies) {
+            if (replyData.triggers.some(trigger => content.includes(trigger))) {
+                await message.reply(replyData.response);
+                return;
             }
         }
     }
@@ -70,10 +71,10 @@ client.on('messageCreate', async (message) => {
     
     const args = message.content.slice(config.PREFIX.length).trim().split(/ +/);
     const commandName = args.shift().toLowerCase();
-
-    if (!client.commands.has(commandName)) return;
-
     const command = client.commands.get(commandName);
+
+    if (!command) return;
+
     try {
         await command.execute(message, args, client);
     } catch (error) {
@@ -82,13 +83,18 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// نظام التفاعلات (للحذف)
+// نظام التفاعلات المطور
 client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isStringSelectMenu()) return;
-    
-    const command = client.commands.get('autoreply');
-    if (command?.handleInteractions) {
-        await command.handleInteractions(interaction, client);
+    // معالجة المودالات
+    if (interaction.isModalSubmit()) {
+        const command = client.commands.get('autoreply');
+        if (command?.handleModal) await command.handleModal(interaction, client);
+    }
+
+    // معالجة الأزرار والقوائم
+    if (interaction.isButton() || interaction.isStringSelectMenu()) {
+        const command = client.commands.get('autoreply');
+        if (command?.handleInteractions) await command.handleInteractions(interaction, client);
     }
 });
 
@@ -99,13 +105,13 @@ for (const file of eventFiles) {
     event(client);
 }
 
-// خادم ويب
+// خادم ويب (بدون تغيير)
 const express = require('express');
 const app = express();
 app.get('/', (req, res) => res.send('البوت يعمل!'));
 app.listen(10000, () => console.log('🌐 الخادم يعمل على المنفذ 10000'));
 
-// إبقاء البوت نشطًا
+// نظام الإبقاء على التشغيل (بدون تغيير)
 setInterval(() => console.log("🟢 البوت يعمل..."), 5 * 60 * 1000);
 
 client.login(config.TOKEN);
