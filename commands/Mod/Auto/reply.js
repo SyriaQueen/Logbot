@@ -1,5 +1,5 @@
 const { EmbedBuilder, PermissionsBitField, ActionRowBuilder, ButtonBuilder, StringSelectMenuBuilder } = require('discord.js');
-const config = require('../../config.js');
+const config = require('../../../config.js');
 
 module.exports = {
     name: 'autoreply',
