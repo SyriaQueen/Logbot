@@ -1,62 +1,57 @@
 const { EmbedBuilder, ButtonBuilder, ActionRowBuilder } = require('discord.js');
-const config = require('../../../config.js');
+const config = require('../../config.js');
 
 module.exports = {
     name: 'warnings',
+    aliases: ['التحذيرات', 'انذارات', 'الإنذارات'],
     async execute(message, args, client) {
         const target = message.mentions.users.first() || message.author;
-        const guildWarns = client.warnings.get(message.guild.id)?.users?.get(target.id);
-
-        if (!guildWarns?.length) {
-            return message.reply('❌ لا يوجد تحذيرات');
+        const guildData = client.warnings.get(message.guild.id);
+        
+        if (!guildData?.users?.has(target.id)) {
+            return message.reply({ content: '❌ لا يوجد تحذيرات!' });
         }
 
-        let page = 0;
-        const maxPage = Math.ceil(guildWarns.length / 5);
+        const warnings = guildData.users.get(target.id);
+        let currentPage = 0;
+        const maxPage = Math.ceil(warnings.length / 5);
 
-        const updateEmbed = () => {
-            return new EmbedBuilder()
-                .setColor(0x0099FF)
-                .setTitle(`سجل التحذيرات - ${target.tag}`)
-                .setDescription(guildWarns
-                    .slice(page * 5, (page + 1) * 5)
-                    .map(w => `**#${w.id}** <t:${Math.floor(w.date/1000)}>\n${w.reason}`)
-                    .join('\n\n'))
-                .setFooter({ text: `الصفحة ${page + 1}/${maxPage}` });
-        };
+        const generateEmbed = () => new EmbedBuilder()
+            .setColor(0x2F3136)
+            .setAuthor({ name: target.tag, iconURL: target.displayAvatarURL() })
+            .setTitle(`📂 سجل التحذيرات (${warnings.length})`)
+            .setDescription(
+                warnings
+                    .slice(currentPage * 5, (currentPage + 1) * 5)
+                    .map(w => `**#${w.id}** - <t:${Math.floor(w.date/1000)}:R>\n» ${w.reason.substring(0, 45)}${w.reason.length > 45 ? '...' : ''}\n» بواسطة: <@${w.moderator}>`)
+                    .join('\n\n')
+            )
+            .setFooter({ text: `الصفحة ${currentPage + 1}/${maxPage}`, iconURL: message.guild.iconURL() });
 
         const buttons = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('prev')
                 .setLabel('السابق')
                 .setStyle(2)
-                .setDisabled(page === 0),
+                .setDisabled(currentPage === 0),
             new ButtonBuilder()
                 .setCustomId('next')
                 .setLabel('التالي')
                 .setStyle(2)
-                .setDisabled(page >= maxPage - 1)
+                .setDisabled(currentPage >= maxPage - 1)
         );
 
-        const msg = await message.reply({ 
-            embeds: [updateEmbed()], 
-            components: [buttons] 
-        });
-
-        const filter = i => i.user.id === message.author.id;
-        const collector = msg.createMessageComponentCollector({ filter, time: 60000 });
+        const msg = await message.reply({ embeds: [generateEmbed()], components: [buttons] });
+        const collector = msg.createMessageComponentCollector({ time: 60000 });
 
         collector.on('collect', async i => {
-            if (i.customId === 'prev') page--;
-            if (i.customId === 'next') page++;
-
-            buttons.components[0].setDisabled(page === 0);
-            buttons.components[1].setDisabled(page >= maxPage - 1);
-
-            await i.update({
-                embeds: [updateEmbed()],
-                components: [buttons]
-            });
+            if (i.user.id !== message.author.id) return;
+            i.customId === 'prev' ? currentPage-- : currentPage++;
+            buttons.components[0].setDisabled(currentPage === 0);
+            buttons.components[1].setDisabled(currentPage >= maxPage - 1);
+            await i.update({ embeds: [generateEmbed()], components: [buttons] });
         });
+
+        collector.on('end', () => msg.edit({ components: [buttons.setComponents(buttons.components.map(b => b.setDisabled(true)))] }));
     }
 };
