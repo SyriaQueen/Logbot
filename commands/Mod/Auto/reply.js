@@ -1,103 +1,150 @@
-const { EmbedBuilder, PermissionsBitField, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
 module.exports = {
     name: 'autoreply',
     aliases: ['رد', 'الرد', 'ردتلقائي'],
     
     async execute(message, args, client) {
-        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-            return message.reply({ content: '❌ تحتاج صلاحية **إدارة الخادم**!' });
-        }
+        const mainEmbed = new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle('⚙️ نظام الردود التلقائية')
+            .setDescription('اختر الإجراء المطلوب:');
 
-        const subCommand = args[0]?.toLowerCase();
-        const guildReplies = client.autoReplies.get(message.guild.id) || new Map();
+        const buttons = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('info')
+                .setLabel('معلومات')
+                .setStyle(1),
+            new ButtonBuilder()
+                .setCustomId('add')
+                .setLabel('إضافة')
+                .setStyle(3)
+        );
 
-        // إضافة رد
-        if (subCommand === 'add') {
-            const trigger = args[1];
-            const response = args.slice(2).join(' ');
+        const msg = await message.reply({ 
+            embeds: [mainEmbed], 
+            components: [buttons] 
+        });
 
-            if (!trigger || !response) {
-                return message.reply('❌ استخدام: `!رد add [الكلمة] [الرد]`');
-            }
+        const collector = msg.createMessageComponentCollector({ time: 60000 });
 
-            guildReplies.set(trigger.toLowerCase(), response);
-            client.autoReplies.set(message.guild.id, guildReplies);
+        collector.on('collect', async i => {
+            if (i.user.id !== message.author.id) return;
+            
+            // قسم المعلومات
+            if (i.customId === 'info') {
+                const guildReplies = client.autoReplies.get(message.guild.id) || new Map();
+                if (guildReplies.size === 0) return i.update({ content: '❌ لا توجد ردود!', components: [] });
 
-            return message.reply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor(0x00FF00)
-                        .setDescription(`✅ **تم إضافة رد:**\nالكلمة: \`${trigger}\`\nالرد: ${response}`)
-                ]
-            });
+                let currentPage = 0;
+                const perPage = 5;
+                const totalPages = Math.ceil(guildReplies.size / perPage);
 
-        // حذف رد
-        } else if (subCommand === 'delete') {
-            if (guildReplies.size === 0) {
-                return message.reply('❌ لا توجد ردود مضافة!');
-            }
+                const generateEmbed = () => {
+                    const replies = Array.from(guildReplies.entries())
+                        .slice(currentPage * perPage, (currentPage + 1) * perPage);
 
-            const options = Array.from(guildReplies.entries()).map(([trigger, response]) => ({
-                label: trigger.length > 25 ? trigger.slice(0, 22) + '...' : trigger,
-                description: response.length > 50 ? response.slice(0, 47) + '...' : response,
-                value: `delete|${trigger}`
-            }));
+                    return new EmbedBuilder()
+                        .setColor(0x2F3136)
+                        .setTitle(`📜 الردود (${currentPage + 1}/${totalPages})`)
+                        .setDescription(
+                            replies.map(([id, data], index) => 
+                                `**${currentPage * perPage + index + 1}.** ${data.triggers.join(', ')}\n↳ ${data.response}`
+                        ).join('\n\n'))
+                        .setFooter({ text: 'استخدم الأزرار للتحكم' });
+                };
 
-            const menu = new StringSelectMenuBuilder()
-                .setCustomId('delete_reply')
-                .setPlaceholder('اختر ردًا للحذف')
-                .addOptions(options);
-
-            return message.reply({
-                embeds: [new EmbedBuilder().setColor(0x0099FF).setTitle('🗑️ حذف رد تلقائي')],
-                components: [new ActionRowBuilder().addComponents(menu)]
-            });
-
-        // عرض الردود
-        } else if (subCommand === 'list') {
-            if (guildReplies.size === 0) {
-                return message.reply('❌ لا توجد ردود مضافة!');
-            }
-
-            const embed = new EmbedBuilder()
-                .setColor(0x0099FF)
-                .setTitle(`📜 قائمة الردود (${guildReplies.size})`)
-                .setDescription(
-                    Array.from(guildReplies.entries())
-                        .map(([trigger, response], index) => `**${index + 1}.** \`${trigger}\` → ${response}`)
-                        .join('\n')
+                const navButtons = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('prev')
+                        .setLabel('السابق')
+                        .setStyle(2),
+                    new ButtonBuilder()
+                        .setCustomId('next')
+                        .setLabel('التالي')
+                        .setStyle(2),
+                    new ButtonBuilder()
+                        .setCustomId('delete')
+                        .setLabel('حذف')
+                        .setStyle(4)
+                        .setEmoji('🗑️')
                 );
 
-            return message.reply({ embeds: [embed] });
+                await i.update({ 
+                    embeds: [generateEmbed()], 
+                    components: [navButtons] 
+                });
 
-        // المساعدة
-        } else {
-            const helpEmbed = new EmbedBuilder()
-                .setColor(0x0099FF)
-                .setTitle('🛠️ مساعدة نظام الردود')
-                .addFields(
-                    { name: 'إضافة رد', value: '`!رد add [الكلمة] [الرد]`', inline: true },
-                    { name: 'حذف رد', value: '`!رد delete`', inline: true },
-                    { name: 'عرض الردود', value: '`!رد list`', inline: true }
+                const pageCollector = msg.createMessageComponentCollector({ time: 60000 });
+                
+                pageCollector.on('collect', async pi => {
+                    if (pi.customId === 'prev') currentPage--;
+                    if (pi.customId === 'next') currentPage++;
+                    if (pi.customId === 'delete') {
+                        // كود الحذف هنا
+                    }
+                    
+                    navButtons.components[0].setDisabled(currentPage === 0);
+                    navButtons.components[1].setDisabled(currentPage >= totalPages - 1);
+                    await pi.update({ embeds: [generateEmbed()], components: [navButtons] });
+                });
+
+            // قسم الإضافة
+            } else if (i.customId === 'add') {
+                const modal = new ModalBuilder()
+                    .setCustomId('add_reply')
+                    .setTitle('إضافة رد جديد');
+
+                const triggersInput = new TextInputBuilder()
+                    .setCustomId('triggers')
+                    .setLabel('الكلمات المطلوبة (مفصولة بفاصلة)')
+                    .setStyle(TextInputStyle.Short);
+
+                const responseInput = new TextInputBuilder()
+                    .setCustomId('response')
+                    .setLabel('الرد المراد إرساله')
+                    .setStyle(TextInputStyle.Paragraph);
+
+                modal.addComponents(
+                    new ActionRowBuilder().addComponents(triggersInput),
+                    new ActionRowBuilder().addComponents(responseInput)
                 );
 
-            return message.reply({ embeds: [helpEmbed] });
-        }
+                await i.showModal(modal);
+            }
+        });
     },
 
-    async handleInteractions(interaction, client) {
-        if (!interaction.isStringSelectMenu() || interaction.customId !== 'delete_reply') return;
+    async handleModal(interaction, client) {
+        if (interaction.customId !== 'add_reply') return;
         
-        const [action, trigger] = interaction.values[0].split('|');
-        const guildReplies = client.autoReplies.get(interaction.guild.id);
+        const triggers = interaction.fields.getTextInputValue('triggers')
+            .split(',')
+            .map(t => t.trim().toLowerCase())
+            .filter(t => t.length > 0);
 
-        if (action === 'delete' && guildReplies?.has(trigger)) {
-            guildReplies.delete(trigger);
-            await interaction.update({
-                content: `✅ تم حذف الرد: \`${trigger}\``,
-                components: []
-            });
+        const response = interaction.fields.getTextInputValue('response');
+
+        if (!triggers.length || !response) {
+            return interaction.reply({ content: '❌ يجب إدخال بيانات صحيحة!', ephemeral: true });
         }
+
+        const guildReplies = client.autoReplies.get(interaction.guild.id) || new Map();
+        const replyId = Date.now().toString();
+
+        guildReplies.set(replyId, {
+            triggers: triggers,
+            response: response
+        });
+
+        client.autoReplies.set(interaction.guild.id, guildReplies);
+
+        await interaction.reply({
+            embeds: [
+                new EmbedBuilder()
+                    .setColor(0x00FF00)
+                    .setDescription(`✅ **تم الإضافة بنجاح**\nالكلمات: \`${triggers.join(', ')}\`\nالرد: ${response}`)
+            ]
+        });
     }
 };
