@@ -1,4 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
+const config = require('../../../config.js');
 
 module.exports = {
     name: 'warn',
