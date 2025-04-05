@@ -6,6 +6,7 @@ const {
     TextInputBuilder, 
     TextInputStyle, 
     PermissionsBitField,
+    ButtonStyle,
     StringSelectMenuBuilder 
 } = require('discord.js');
 
@@ -15,24 +16,24 @@ module.exports = {
     
     async execute(message, args, client) {
         if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-            return message.reply({ content: '❌ تحتاج صلاحية **إدارة الخادم**!', ephemeral: true });
+            return message.reply({ content: '❌ صلاحية مطل��بة: **إدارة الخادم**', ephemeral: true });
         }
 
         const mainEmbed = new EmbedBuilder()
             .setColor(0x0099FF)
             .setTitle('⚙️ نظام الردود التلقائية')
-            .setDescription('اختر الإجراء المطلوب من الأزرار أدناه:');
+            .setDescription('اختر الإجراء المطلوب:');
 
         const buttons = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('list_replies')
                 .setLabel('عرض الردود')
-                .setStyle(1)
+                .setStyle(ButtonStyle.Primary)
                 .setEmoji('📜'),
             new ButtonBuilder()
                 .setCustomId('add_reply')
                 .setLabel('إضافة رد')
-                .setStyle(3)
+                .setStyle(ButtonStyle.Success)
                 .setEmoji('➕')
         );
 
@@ -48,7 +49,7 @@ module.exports = {
 
             // قسم عرض الردود
             if (i.customId === 'list_replies') {
-                const guildReplies = client.autoReplies.get(message.guild.id);
+                const guildReplies = client.autoReplies.get(i.guild.id);
                 if (!guildReplies?.size) {
                     return i.update({ content: '❌ لا توجد ردود مضافة!', components: [] });
                 }
@@ -75,17 +76,17 @@ module.exports = {
                     new ButtonBuilder()
                         .setCustomId('prev')
                         .setLabel('السابق')
-                        .setStyle(2)
+                        .setStyle(ButtonStyle.Secondary)
                         .setDisabled(currentPage === 0),
                     new ButtonBuilder()
                         .setCustomId('next')
                         .setLabel('التالي')
-                        .setStyle(2)
+                        .setStyle(ButtonStyle.Secondary)
                         .setDisabled(currentPage >= totalPages - 1),
                     new ButtonBuilder()
-                        .setCustomId('delete')
+                        .setCustomId('delete_reply')
                         .setLabel('حذف')
-                        .setStyle(4)
+                        .setStyle(ButtonStyle.Danger)
                         .setEmoji('🗑️')
                 );
 
@@ -100,30 +101,21 @@ module.exports = {
                     if (pi.customId === 'prev') currentPage--;
                     if (pi.customId === 'next') currentPage++;
                     
-                    if (pi.customId === 'delete') {
-                        const selectMenu = new StringSelectMenuBuilder()
-                            .setCustomId('delete_reply')
+                    if (pi.customId === 'delete_reply') {
+                        const menu = new StringSelectMenuBuilder()
+                            .setCustomId('delete_menu')
                             .setPlaceholder('اختر ردًا للحذف')
                             .addOptions(
-                                Array.from(guildReplies.entries())
-                                    .map(([id, data]) => ({
-                                        label: data.triggers.join(', ').slice(0, 50),
-                                        description: data.response.slice(0, 50),
-                                        value: id
-                                    }))
+                                Array.from(guildReplies.entries()).map(([id, data]) => ({
+                                    label: data.triggers.slice(0, 25).join(', '),
+                                    description: data.response.slice(0, 50),
+                                    value: id
+                                }))
                             );
 
-                        await pi.showModal(new ModalBuilder()
-                            .setCustomId('confirm_delete')
-                            .setTitle('تأكيد الحذف')
-                            .addComponents(
-                                new ActionRowBuilder().addComponents(
-                                    new TextInputBuilder()
-                                        .setCustomId('confirm')
-                                        .setLabel('اكتب "تأكيد" لحذف الرد')
-                                        .setStyle(TextInputStyle.Short)
-                                )
-                            ));
+                        await pi.update({
+                            components: [new ActionRowBuilder().addComponents(menu)]
+                        });
                     }
 
                     navButtons.components[0].setDisabled(currentPage === 0);
@@ -135,16 +127,16 @@ module.exports = {
             } else if (i.customId === 'add_reply') {
                 const modal = new ModalBuilder()
                     .setCustomId('add_reply_modal')
-                    .setTitle('إنشاء رد تلقائي');
+                    .setTitle('إضافة رد جديد');
 
                 const triggersInput = new TextInputBuilder()
-                    .setCustomId('triggers')
+                    .setCustomId('triggers_input')
                     .setLabel('الكلمات المطلوبة (مفصولة بفاصلة)')
                     .setStyle(TextInputStyle.Short);
 
                 const responseInput = new TextInputBuilder()
-                    .setCustomId('response')
-                    .setLabel('نص الرد')
+                    .setCustomId('response_input')
+                    .setLabel('الرد المراد إرساله')
                     .setStyle(TextInputStyle.Paragraph);
 
                 modal.addComponents(
@@ -159,12 +151,12 @@ module.exports = {
 
     async handleModal(interaction, client) {
         if (interaction.customId === 'add_reply_modal') {
-            const triggers = interaction.fields.getTextInputValue('triggers')
+            const triggers = interaction.fields.getTextInputValue('triggers_input')
                 .split(',')
                 .map(t => t.trim().toLowerCase())
                 .filter(t => t.length > 0);
 
-            const response = interaction.fields.getTextInputValue('response');
+            const response = interaction.fields.getTextInputValue('response_input');
 
             if (!triggers.length || !response) {
                 return interaction.reply({ 
@@ -182,28 +174,22 @@ module.exports = {
                     new EmbedBuilder()
                         .setColor(0x00FF00)
                         .setDescription(`✅ **تمت الإضافة بنجاح**\nالكلمات: \`${triggers.join(', ')}\`\nالرد: ${response}`)
-                ]
+                ],
+                ephemeral: true
             });
         }
+    },
 
-        if (interaction.customId === 'confirm_delete') {
-            const confirmation = interaction.fields.getTextInputValue('confirm');
-            if (confirmation !== 'تأكيد') {
-                return interaction.reply({ 
-                    content: '❌ تم إلغاء الحذف', 
-                    ephemeral: true 
-                });
-            }
-
+    async handleInteractions(interaction, client) {
+        if (interaction.isStringSelectMenu() && interaction.customId === 'delete_menu') {
+            const replyId = interaction.values[0];
             const guildReplies = client.autoReplies.get(interaction.guild.id);
-            const replyId = interaction.message.embeds[0].description
-                .match(/\*\*(\d+)\.\*\*/)[1];
-
+            
             if (guildReplies?.has(replyId)) {
                 guildReplies.delete(replyId);
-                await interaction.reply({ 
-                    content: `✅ تم حذف الرد رقم ${replyId}`, 
-                    ephemeral: true 
+                await interaction.update({
+                    content: `✅ تم حذف الرد بنجاح!`,
+                    components: []
                 });
             }
         }
