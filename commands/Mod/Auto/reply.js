@@ -6,7 +6,6 @@ const {
     TextInputBuilder, 
     TextInputStyle, 
     PermissionsBitField,
-    ButtonStyle,
     StringSelectMenuBuilder 
 } = require('discord.js');
 
@@ -16,13 +15,13 @@ module.exports = {
     
     async execute(message, args, client) {
         if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-            return message.reply({ content: '❌ صلاحية مطل��بة: **إدارة الخادم**', ephemeral: true });
+            return message.reply({ content: '❌ تحتاج صلاحية **إدارة الخادم**!', ephemeral: true });
         }
 
         const mainEmbed = new EmbedBuilder()
             .setColor(0x0099FF)
             .setTitle('⚙️ نظام الردود التلقائية')
-            .setDescription('اختر الإجراء المطلوب:');
+            .setDescription('اختر الإجراء المطلوب من الأزرار أدناه:');
 
         const buttons = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
@@ -49,7 +48,7 @@ module.exports = {
 
             // قسم عرض الردود
             if (i.customId === 'list_replies') {
-                const guildReplies = client.autoReplies.get(i.guild.id);
+                const guildReplies = client.autoReplies.get(message.guild.id);
                 if (!guildReplies?.size) {
                     return i.update({ content: '❌ لا توجد ردود مضافة!', components: [] });
                 }
@@ -74,12 +73,12 @@ module.exports = {
 
                 const navButtons = new ActionRowBuilder().addComponents(
                     new ButtonBuilder()
-                        .setCustomId('prev')
+                        .setCustomId('prev_page')
                         .setLabel('السابق')
                         .setStyle(ButtonStyle.Secondary)
                         .setDisabled(currentPage === 0),
                     new ButtonBuilder()
-                        .setCustomId('next')
+                        .setCustomId('next_page')
                         .setLabel('التالي')
                         .setStyle(ButtonStyle.Secondary)
                         .setDisabled(currentPage >= totalPages - 1),
@@ -98,23 +97,26 @@ module.exports = {
                 const pageCollector = msg.createMessageComponentCollector({ time: 60000 });
                 
                 pageCollector.on('collect', async pi => {
-                    if (pi.customId === 'prev') currentPage--;
-                    if (pi.customId === 'next') currentPage++;
+                    if (pi.customId === 'prev_page') currentPage--;
+                    if (pi.customId === 'next_page') currentPage++;
                     
                     if (pi.customId === 'delete_reply') {
-                        const menu = new StringSelectMenuBuilder()
-                            .setCustomId('delete_menu')
+                        const selectMenu = new StringSelectMenuBuilder()
+                            .setCustomId('select_reply_to_delete')
                             .setPlaceholder('اختر ردًا للحذف')
                             .addOptions(
-                                Array.from(guildReplies.entries()).map(([id, data]) => ({
-                                    label: data.triggers.slice(0, 25).join(', '),
-                                    description: data.response.slice(0, 50),
-                                    value: id
-                                }))
+                                Array.from(guildReplies.entries())
+                                    .map(([id, data]) => ({
+                                        label: data.triggers.join(', ').slice(0, 25),
+                                        description: data.response.slice(0, 50),
+                                        value: id
+                                    }))
                             );
 
                         await pi.update({
-                            components: [new ActionRowBuilder().addComponents(menu)]
+                            content: 'اختر الرد الذي تريد حذفه:',
+                            components: [new ActionRowBuilder().addComponents(selectMenu)],
+                            embeds: []
                         });
                     }
 
@@ -127,17 +129,19 @@ module.exports = {
             } else if (i.customId === 'add_reply') {
                 const modal = new ModalBuilder()
                     .setCustomId('add_reply_modal')
-                    .setTitle('إضافة رد جديد');
+                    .setTitle('إنشاء رد تلقائي');
 
                 const triggersInput = new TextInputBuilder()
                     .setCustomId('triggers_input')
                     .setLabel('الكلمات المطلوبة (مفصولة بفاصلة)')
-                    .setStyle(TextInputStyle.Short);
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true);
 
                 const responseInput = new TextInputBuilder()
                     .setCustomId('response_input')
-                    .setLabel('الرد المراد إرساله')
-                    .setStyle(TextInputStyle.Paragraph);
+                    .setLabel('نص الرد')
+                    .setStyle(TextInputStyle.Paragraph)
+                    .setRequired(true);
 
                 modal.addComponents(
                     new ActionRowBuilder().addComponents(triggersInput),
@@ -181,7 +185,9 @@ module.exports = {
     },
 
     async handleInteractions(interaction, client) {
-        if (interaction.isStringSelectMenu() && interaction.customId === 'delete_menu') {
+        if (!interaction.isStringSelectMenu()) return;
+        
+        if (interaction.customId === 'select_reply_to_delete') {
             const replyId = interaction.values[0];
             const guildReplies = client.autoReplies.get(interaction.guild.id);
             
@@ -189,7 +195,8 @@ module.exports = {
                 guildReplies.delete(replyId);
                 await interaction.update({
                     content: `✅ تم حذف الرد بنجاح!`,
-                    components: []
+                    components: [],
+                    embeds: []
                 });
             }
         }
