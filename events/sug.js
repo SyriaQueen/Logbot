@@ -29,8 +29,8 @@ module.exports = (client) => {
 
         const row = new ActionRowBuilder()
             .addComponents(
-                new ButtonBuilder().setCustomId(`accept_${message.author.id}`).setLabel('قبول').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId(`reject_${message.author.id}`).setLabel('رفض').setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId(`accept_${message.author.id}_${message.id}`).setLabel('قبول').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId(`reject_${message.author.id}_${message.id}`).setLabel('رفض').setStyle(ButtonStyle.Danger),
                 new ButtonBuilder().setCustomId('upvote').setEmoji({ id: '1280855790021771297', name: 'True', animated: true }).setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('downvote').setEmoji({ id: '1280855878223921152', name: 'False', animated: true }).setStyle(ButtonStyle.Secondary)
             );
@@ -90,9 +90,17 @@ module.exports = (client) => {
         if (!interaction.isModalSubmit()) return;
 
         const reason = interaction.fields.getTextInputValue('reason');
-        const originalEmbed = interaction.message.embeds[0];
-        const decision = interaction.customId.includes('accept') ? '✅ القبول' : '❌ الرفض';
-        const decisionColor = interaction.customId.includes('accept') ? 0x28A745 : 0xDC3545;
+        const customIdParts = interaction.customId.split('_');
+        const decisionType = customIdParts[0].split('-')[1];
+        const suggestionAuthorId = customIdParts[1];
+        const originalMessageId = customIdParts[2];
+
+        const message = await interaction.channel.messages.fetch(originalMessageId).catch(() => null);
+        if (!message) return interaction.reply({ content: 'تعذر العثور على رسالة الاقتراح.', ephemeral: true });
+
+        const originalEmbed = message.embeds[0];
+        const decision = decisionType === 'accept' ? '✅ القبول' : '❌ الرفض';
+        const decisionColor = decisionType === 'accept' ? 0x28A745 : 0xDC3545;
 
         const updatedButtons = new ActionRowBuilder()
             .addComponents(
@@ -104,11 +112,8 @@ module.exports = (client) => {
             .spliceFields(0, 1, { name: decision, value: reason, inline: true })
             .setColor(decisionColor);
 
-        await interaction.message.edit({ embeds: [updatedEmbed], components: [updatedButtons] });
+        await message.edit({ embeds: [updatedEmbed], components: [updatedButtons] });
         await interaction.reply({ content: `تم ${decision.replace('✅ ', '').replace('❌ ', '').toLowerCase()}.`, flags: MessageFlags.Ephemeral });
-
-        const customIdParts = interaction.customId.split('_');
-        const suggestionAuthorId = customIdParts[customIdParts.length - 1];
 
         let suggestionAuthor;
         try {
@@ -120,7 +125,7 @@ module.exports = (client) => {
 
         if (suggestionAuthor) {
             suggestionAuthor.send({
-                content: `تم الرد على اقتراحك ب${decision.replace('✅ ', '').replace('❌ ', '')}.\n**السبب:** ${reason}\n\n🔗 **رابط الاقتراح:** [اضغط هنا](https://discord.com/channels/${interaction.guild.id}/${interaction.channel.id}/${interaction.message.id})`
+                content: `تم الرد على اقتراحك ب${decision.replace('✅ ', '').replace('❌ ', '')}.\n**السبب:** ${reason}\n\n🔗 **رابط الاقتراح:** [اضغط هنا](https://discord.com/channels/${interaction.guild.id}/${interaction.channel.id}/${message.id})`
             }).catch(console.error);
         }
 
@@ -143,7 +148,7 @@ module.exports = (client) => {
                     },
                     { name: '📌 الحالة', value: `**${decision}**`, inline: true },
                     { name: '✍️ السبب', value: `**${reason}**`, inline: false },
-                    { name: '🔗 رابط الاقتراح', value: `[اضغط هنا](https://discord.com/channels/${interaction.guild.id}/${interaction.channel.id}/${interaction.message.id})` }
+                    { name: '🔗 رابط الاقتراح', value: `[اضغط هنا](https://discord.com/channels/${interaction.guild.id}/${interaction.channel.id}/${message.id})` }
                 )
                 .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 1024 }))
                 .setFooter({ text: '📅 تم الرد في', iconURL: interaction.guild.iconURL() })
