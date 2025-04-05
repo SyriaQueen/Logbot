@@ -34,6 +34,11 @@ const commandFiles = readCommands(path.join(__dirname, 'commands'));
 for (const filePath of commandFiles) {
     const command = require(filePath);
     client.commands.set(command.name, command);
+if (command.aliases) {
+    command.aliases.forEach(alias => {
+        client.commands.set(alias, command);
+    });
+        }
 }
 
 client.once('ready', () => {
