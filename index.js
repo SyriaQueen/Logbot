@@ -12,7 +12,7 @@ const client = new Client({
 });
 
 client.commands = new Map();
-
+client.warnings = new Map();
 // دالة لقراءة الملفات بشكل عاودي
 function readCommands(dir) {
     const files = fs.readdirSync(dir, { withFileTypes: true });
