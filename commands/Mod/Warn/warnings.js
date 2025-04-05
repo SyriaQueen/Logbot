@@ -1,5 +1,5 @@
 const { EmbedBuilder, ButtonBuilder, ActionRowBuilder } = require('discord.js');
-const config = require('../../config.js');
+const config = require('../../../config.js');
 
 module.exports = {
     name: 'warnings',
